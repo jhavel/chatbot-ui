@@ -3,12 +3,27 @@ import { ChatAPIPayload } from "@/types"
 import { OpenAIStream, StreamingTextResponse } from "ai"
 import OpenAI from "openai"
 import { ChatCompletionCreateParamsBase } from "openai/resources/chat/completions.mjs"
+import { getMemories } from "@/lib/supabase/memories"
 
 export const runtime = "edge"
 
 export async function POST(request: Request) {
   const json = await request.json()
   const { chatSettings, messages } = json as ChatAPIPayload
+
+  // 🧠 Load structured memory entries and inject as system messages
+  let memoryMessages: ChatCompletionCreateParamsBase["messages"] = []
+
+  try {
+    const memories = await getMemories()
+
+    memoryMessages = memories.map(entry => ({
+      role: "system",
+      content: `Memory: ${entry.content}`
+    }))
+  } catch (e) {
+    console.error("Error loading memories:", e)
+  }
 
   try {
     const profile = await getServerProfile()
@@ -53,7 +68,10 @@ export async function POST(request: Request) {
 
     const response = await azureOpenai.chat.completions.create({
       model: DEPLOYMENT_ID as ChatCompletionCreateParamsBase["model"],
-      messages: messages as ChatCompletionCreateParamsBase["messages"],
+      messages: [
+        ...memoryMessages,
+        ...messages
+      ] as ChatCompletionCreateParamsBase["messages"],
       temperature: chatSettings.temperature,
       max_tokens: chatSettings.model === "gpt-4-vision-preview" ? 4096 : null, // TODO: Fix
       stream: true
