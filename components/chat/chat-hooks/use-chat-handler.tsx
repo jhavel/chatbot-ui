@@ -175,7 +175,7 @@ export const useChatHandler = () => {
       // })
     }
 
-    return router.push(`/${selectedWorkspace.id}/chat`)
+    return router.push(`/workspace/${selectedWorkspace.id}/chat`)
   }
 
   const handleFocusChatInput = () => {
@@ -256,7 +256,8 @@ export const useChatHandler = () => {
           b64Images,
           isRegeneration,
           setChatMessages,
-          selectedAssistant
+          selectedAssistant,
+          profile
         )
 
       let payload: ChatPayload = {

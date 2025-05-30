@@ -5,9 +5,12 @@ const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 )
 
-// Save a memory entry
-export const saveMemory = async (content: string) => {
-  const { data, error } = await supabase.from("memories").insert([{ content }])
+// Save a memory entry with a user_id
+export const saveMemory = async (content: string, user_id: string) => {
+  const { data, error } = await supabase
+    .from("memories")
+    .insert([{ content, user_id }])
+
   if (error) throw error
   return data
 }

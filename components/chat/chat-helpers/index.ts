@@ -22,6 +22,7 @@ import {
 import React from "react"
 import { toast } from "sonner"
 import { v4 as uuidv4 } from "uuid"
+import { saveMemory } from "@/db/memories"
 
 export const validateChatSettings = (
   chatSettings: ChatSettings | null,
@@ -86,7 +87,8 @@ export const createTempMessages = (
   b64Images: string[],
   isRegeneration: boolean,
   setChatMessages: React.Dispatch<React.SetStateAction<ChatMessage[]>>,
-  selectedAssistant: Tables<"assistants"> | null
+  selectedAssistant: Tables<"assistants"> | null,
+  profile: Tables<"profiles"> | null
 ) => {
   let tempUserChatMessage: ChatMessage = {
     message: {
@@ -100,7 +102,7 @@ export const createTempMessages = (
       role: "user",
       sequence_number: chatMessages.length,
       updated_at: "",
-      user_id: ""
+      user_id: profile?.user_id || ""
     },
     fileItems: []
   }
@@ -117,7 +119,7 @@ export const createTempMessages = (
       role: "assistant",
       sequence_number: chatMessages.length + 1,
       updated_at: "",
-      user_id: ""
+      user_id: profile?.user_id || ""
     },
     fileItems: []
   }
@@ -510,5 +512,17 @@ export const handleCreateMessages = async (
     })
 
     setChatMessages(finalChatMessages)
+  }
+
+  // Save to memory if assistant response includes "I'll remember"
+  if (
+    generatedText.toLowerCase().includes("i'll remember") ||
+    generatedText.toLowerCase().includes("i will remember")
+  ) {
+    try {
+      await saveMemory(messageContent, profile.user_id)
+    } catch (err) {
+      console.error("Failed to save memory:", err)
+    }
   }
 }
