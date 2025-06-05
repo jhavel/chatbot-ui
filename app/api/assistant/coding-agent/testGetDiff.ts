@@ -1,4 +1,4 @@
-const { getDiff } = require("./getDiff")
+import { getDiff } from "./getDiff"
 
 const oldCode = `function greet() { console.log("Hello") }`
 const newCode = `function greet() { console.log("Hi there") }`
