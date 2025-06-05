@@ -520,7 +520,7 @@ export const handleCreateMessages = async (
     generatedText.toLowerCase().includes("i will remember")
   ) {
     try {
-      await saveMemory(messageContent, profile.user_id)
+      await saveMemory(generatedText, profile.user_id)
     } catch (err) {
       console.error("Failed to save memory:", err)
     }

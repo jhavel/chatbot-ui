@@ -159,7 +159,7 @@ export const useChatHandler = () => {
     } else if (selectedWorkspace) {
       // setChatSettings({
       //   model: (selectedWorkspace.default_model ||
-      //     "gpt-4-1106-preview") as LLMID,
+      //     "gpt-4o") as LLMID,
       //   prompt:
       //     selectedWorkspace.default_prompt ||
       //     "You are a friendly, helpful AI assistant.",
@@ -303,6 +303,9 @@ export const useChatHandler = () => {
         setChatMessages,
         setToolInUse
       )
+
+      // ✅ NEW DEBUG LINE
+      console.log("🧠 Assistant response (generatedText):", generatedText)
 
       if (!currentChat) {
         currentChat = await handleCreateChat(
