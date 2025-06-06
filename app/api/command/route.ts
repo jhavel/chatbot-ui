@@ -10,9 +10,32 @@ export async function POST(request: Request) {
     input: string
   }
 
-  try {
-    const profile = await getServerProfile()
+  console.log("🧠 Received input:", input)
 
+  try {
+    // 🧠 Intercept "edit:" requests for coding agent
+    if (input.toLowerCase().startsWith("edit:")) {
+      const { handleCodeEditRequest } = await import(
+        "@/app/api/assistant/coding-agent/chat-helpers.js"
+      ) // adjust if your helper file is elsewhere
+
+      const instruction = input.slice(5).trim()
+      const fileName = "assistant/coding-agent/tempTestFile.js" // hardcoded for now
+
+      const { diff } = await handleCodeEditRequest(instruction, fileName)
+
+      console.log("🛠️ Running code edit with instruction:", instruction)
+
+      return new Response(
+        JSON.stringify({ content: `Here is the proposed diff:\n\n${diff}` }),
+        {
+          status: 200
+        }
+      )
+    }
+
+    // 🧠 Default: Use OpenAI chat completion
+    const profile = await getServerProfile()
     checkApiKey(profile.openai_api_key, "OpenAI")
 
     const openai = new OpenAI({
@@ -23,20 +46,12 @@ export async function POST(request: Request) {
     const response = await openai.chat.completions.create({
       model: "gpt-4o",
       messages: [
-        {
-          role: "system",
-          content: "Respond to the user."
-        },
-        {
-          role: "user",
-          content: input
-        }
+        { role: "system", content: "Respond to the user." },
+        { role: "user", content: input }
       ],
       temperature: 0,
       max_tokens:
         CHAT_SETTING_LIMITS["gpt-4-turbo-preview"].MAX_TOKEN_OUTPUT_LENGTH
-      //   response_format: { type: "json_object" }
-      //   stream: true
     })
 
     const content = response.choices[0].message.content
