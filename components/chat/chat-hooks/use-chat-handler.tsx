@@ -9,6 +9,7 @@ import { buildFinalMessages } from "@/lib/build-prompt"
 import { Tables } from "@/supabase/types"
 import { ChatMessage, ChatPayload, LLMID, ModelProvider } from "@/types"
 import { useRouter } from "next/navigation"
+import { fileTools } from "@/lib/tools/fileTools"
 import { useContext, useEffect, useRef } from "react"
 import { LLM_LIST } from "../../../lib/models/llm/llm-list"
 import {
@@ -260,9 +261,84 @@ export const useChatHandler = () => {
           profile
         )
 
+      // 🛠️ Route edit requests to coding-agent API
+      if (messageContent.toLowerCase().startsWith("edit file")) {
+        const match = messageContent.match(/^edit file ([^:]+):\s*(.+)$/i)
+
+        if (!match) {
+          throw new Error(
+            "Invalid format. Use: edit file <path>: <instruction>"
+          )
+        }
+
+        const [, filePath, instruction] = match
+
+        const editRes = await fetch("/api/assistant/coding-agent", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({ filePath, instruction })
+        })
+
+        const editData = await editRes.json()
+
+        setChatMessages(prev => [
+          ...prev,
+          tempUserChatMessage,
+          {
+            ...tempAssistantChatMessage,
+            message: {
+              ...tempAssistantChatMessage.message,
+              content: editData.response || "Done editing."
+            }
+          }
+        ])
+
+        setIsGenerating(false)
+        return
+      }
+
+      if (messageContent.toLowerCase().startsWith("show file")) {
+        const match = messageContent.match(/^show file (.+)$/i)
+
+        if (!match) {
+          throw new Error("Invalid format. Use: show file <path>")
+        }
+
+        const [, filePath] = match
+
+        const fileRes = await fetch("/api/assistant/file-reader", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({ filePath })
+        })
+
+        const fileData = await fileRes.json()
+
+        setChatMessages(prev => [
+          ...prev,
+          tempUserChatMessage,
+          {
+            ...tempAssistantChatMessage,
+            message: {
+              ...tempAssistantChatMessage.message,
+              content: `\`\`\`js\n${fileData.content}\n\`\`\``
+            }
+          }
+        ])
+
+        setIsGenerating(false)
+        console.log("show file command handled")
+        return
+      }
+
       let payload: ChatPayload = {
         chatSettings: chatSettings!,
         workspaceInstructions: selectedWorkspace!.instructions || "",
+
         chatMessages: isRegeneration
           ? [...chatMessages]
           : [...chatMessages, tempUserChatMessage],
@@ -279,6 +355,8 @@ export const useChatHandler = () => {
         chatImages
       )
 
+      console.log("calling OpenAI...")
+
       const response = await fetch("/api/chat/openai", {
         method: "POST",
         headers: {
@@ -286,11 +364,97 @@ export const useChatHandler = () => {
         },
         body: JSON.stringify({
           chatSettings: payload.chatSettings,
-          messages: formattedMessages
+          messages: formattedMessages,
+          tools: fileTools.map(({ name, description, parameters }) => ({
+            type: "function",
+            function: { name, description, parameters }
+          }))
         })
       })
 
+      const resData = await response.json()
+
+      if (!response.ok || !resData) {
+        throw new Error("Failed to get response from OpenAI API")
+      }
+
+      const toolCall = resData?.message?.tool_calls?.[0]
+
+      if (toolCall) {
+        const tool = fileTools.find(t => t.name === toolCall.function.name)
+
+        if (tool) {
+          const args = JSON.parse(toolCall.function.arguments)
+          const result = await tool.function(args)
+
+          const followupRes = await fetch("/api/chat/openai", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              chatSettings: payload.chatSettings,
+              messages: [
+                ...formattedMessages,
+                resData.choices[0].message,
+                {
+                  role: "tool",
+                  tool_call_id: toolCall.id,
+                  content: JSON.stringify(result)
+                }
+              ]
+            })
+          })
+
+          generatedText = await processResponse(
+            followupRes,
+            tempAssistantChatMessage,
+            true,
+            newAbortController,
+            setFirstTokenReceived,
+            setChatMessages,
+            setToolInUse
+          )
+
+          // ✅ Ensure the chat exists before saving messages
+          if (!currentChat) {
+            currentChat = await handleCreateChat(
+              chatSettings!,
+              profile!,
+              selectedWorkspace!,
+              messageContent,
+              selectedAssistant!,
+              newMessageFiles,
+              setSelectedChat,
+              setChats,
+              setChatFiles
+            )
+          }
+
+          // ✅ Save tool-generated message
+          await handleCreateMessages(
+            chatMessages,
+            currentChat,
+            profile!,
+            modelData!,
+            messageContent,
+            generatedText,
+            newMessageImages,
+            isRegeneration,
+            retrievedFileItems,
+            setChatMessages,
+            setChatFileItems,
+            setChatImages,
+            selectedAssistant
+          )
+
+          return
+        }
+      }
+
       setToolInUse("none")
+
+      if (!chatSettings || !selectedWorkspace) {
+        throw new Error("Missing chat settings or workspace.")
+      }
 
       generatedText = await processResponse(
         response,
@@ -303,9 +467,6 @@ export const useChatHandler = () => {
         setChatMessages,
         setToolInUse
       )
-
-      // ✅ NEW DEBUG LINE
-      console.log("🧠 Assistant response (generatedText):", generatedText)
 
       if (!currentChat) {
         currentChat = await handleCreateChat(
@@ -352,6 +513,7 @@ export const useChatHandler = () => {
       setIsGenerating(false)
       setFirstTokenReceived(false)
     } catch (error) {
+      console.error("Send message failed:", error)
       setIsGenerating(false)
       setFirstTokenReceived(false)
       setUserInput(startingInput)
@@ -389,3 +551,4 @@ export const useChatHandler = () => {
     handleSendEdit
   }
 }
+export const prompt = `You are a helpful AI assistant. Please respond to the user's queries in a friendly and informative manner. If you need to edit code, please provide the full modified source code without any additional explanations or comments.`
