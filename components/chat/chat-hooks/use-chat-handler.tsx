@@ -285,13 +285,22 @@ export const useChatHandler = () => {
 
         setChatMessages(prev => [
           ...prev,
-          tempUserChatMessage,
           {
-            ...tempAssistantChatMessage,
+            role: "assistant",
             message: {
-              ...tempAssistantChatMessage.message,
-              content: editData.response || "Done editing."
-            }
+              id: crypto.randomUUID(),
+              chat_id: selectedChat?.id || "temp-chat",
+              user_id: profile?.user_id || "temp-user",
+              assistant_id: selectedAssistant?.id || null,
+              model: chatSettings?.model || "gpt-4",
+              role: "assistant",
+              content: editData.response || "Done editing.",
+              image_paths: [],
+              sequence_number: prev.length,
+              created_at: new Date().toISOString(),
+              updated_at: null
+            },
+            fileItems: []
           }
         ])
 
@@ -318,20 +327,49 @@ export const useChatHandler = () => {
 
         const fileData = await fileRes.json()
 
+        // Detect language
+        const ext = filePath.split(".").pop()?.toLowerCase()
+        const lang =
+          ext === "md"
+            ? "markdown"
+            : ext === "tsx"
+              ? "typescript"
+              : ext === "ts"
+                ? "typescript"
+                : ext === "js"
+                  ? "javascript"
+                  : ext === "json"
+                    ? "json"
+                    : ext === "py"
+                      ? "python"
+                      : ext === "html"
+                        ? "html"
+                        : ext === "css"
+                          ? "css"
+                          : "text"
+
         setChatMessages(prev => [
           ...prev,
-          tempUserChatMessage,
           {
-            ...tempAssistantChatMessage,
+            role: "assistant",
             message: {
-              ...tempAssistantChatMessage.message,
-              content: `\`\`\`js\n${fileData.content}\n\`\`\``
-            }
+              id: crypto.randomUUID(),
+              chat_id: selectedChat?.id || "temp-chat",
+              user_id: profile?.user_id || "temp-user",
+              assistant_id: selectedAssistant?.id || null,
+              model: chatSettings?.model || "gpt-4",
+              role: "assistant",
+              content: fileData.content,
+              image_paths: [],
+              sequence_number: prev.length,
+              created_at: new Date().toISOString(),
+              updated_at: null
+            },
+            fileItems: []
           }
         ])
 
         setIsGenerating(false)
-        console.log("show file command handled")
         return
       }
 
