@@ -25,6 +25,9 @@ interface RootLayoutProps {
 }
 
 export const metadata: Metadata = {
+  metadataBase: new URL(
+    process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"
+  ),
   applicationName: APP_NAME,
   title: {
     default: APP_DEFAULT_TITLE,
@@ -57,6 +60,10 @@ export const metadata: Metadata = {
       template: APP_TITLE_TEMPLATE
     },
     description: APP_DESCRIPTION
+  },
+  other: {
+    "mobile-web-app-capable": "yes",
+    "theme-color": "#000000"
   }
 }
 

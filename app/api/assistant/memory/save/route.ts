@@ -1,11 +1,8 @@
 // File: app/api/assistant/memory/save/route.ts
 
-import { createClient } from "@supabase/supabase-js"
+import { createClient } from "@/lib/supabase/client"
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-)
+const supabase = createClient()
 
 export async function POST(req: Request) {
   const { user_id, content } = await req.json()

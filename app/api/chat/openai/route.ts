@@ -41,7 +41,7 @@ export async function POST(request: Request) {
       organization: profile.openai_organization_id
     })
 
-    const response = await openai.chat.completions.create({
+    const stream = await openai.chat.completions.create({
       model: chatSettings.model as ChatCompletionCreateParamsBase["model"],
       messages: finalMessages as ChatCompletionCreateParamsBase["messages"],
       temperature: chatSettings.temperature,
@@ -54,53 +54,29 @@ export async function POST(request: Request) {
         type: "function",
         function: { name, description, parameters }
       })),
-      stream: false
+      stream: true
     })
 
-    const toolCall = response.choices?.[0]?.message?.tool_calls?.[0]
+    const encoder = new TextEncoder()
 
-    if (toolCall) {
-      const tool = fileTools.find(t => t.name === toolCall.function.name)
-
-      if (!tool) {
-        return new Response(JSON.stringify({ message: "Unknown tool" }), {
-          status: 400,
-          headers: { "Content-Type": "application/json" }
-        })
-      }
-
-      const args = JSON.parse(toolCall.function.arguments)
-      const result = await tool.function(args)
-
-      const followup = await openai.chat.completions.create({
-        model: chatSettings.model,
-        messages: [
-          ...finalMessages,
-          response.choices[0].message,
-          {
-            role: "tool",
-            tool_call_id: toolCall.id,
-            content: JSON.stringify(result)
-          }
-        ]
-      })
-
-      return new Response(
-        JSON.stringify({ message: followup.choices[0].message }),
-        {
-          status: 200,
-          headers: { "Content-Type": "application/json" }
+    const readable = new ReadableStream({
+      async start(controller) {
+        for await (const chunk of stream) {
+          controller.enqueue(
+            encoder.encode(`data: ${JSON.stringify(chunk)}\n\n`)
+          )
         }
-      )
-    }
-
-    return new Response(
-      JSON.stringify({ message: response.choices[0].message }),
-      {
-        status: 200,
-        headers: { "Content-Type": "application/json" }
+        controller.close()
       }
-    )
+    })
+
+    return new Response(readable, {
+      headers: {
+        "Content-Type": "text/event-stream",
+        "Cache-Control": "no-cache",
+        Connection: "keep-alive"
+      }
+    })
   } catch (error: any) {
     let errorMessage = error.message || "An unexpected error occurred"
     const errorCode = error.status || 500

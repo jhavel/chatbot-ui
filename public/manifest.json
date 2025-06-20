@@ -1,10 +1,11 @@
 {
-  "short_name": "Chatbot UI",
-  "name": "Chatbot UI",
+  "short_name": "Zeno",
+  "name": "Project Zeno",
+  "description": "A powerful, customizable AI chat interface.",
   "icons": [
     {
       "src": "/icon-192x192.png",
-      "type": "image/ico",
+      "type": "image/png",
       "sizes": "192x192"
     },
     {
@@ -20,6 +21,7 @@
     }
   ],
   "start_url": "/",
+  "scope": "/",
   "display": "standalone",
   "theme_color": "#000000",
   "background_color": "#000000"

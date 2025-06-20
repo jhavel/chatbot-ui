@@ -45,6 +45,12 @@ export const Message: FC<MessageProps> = ({
   onCancelEdit,
   onSubmitEdit
 }) => {
+  useEffect(() => {
+    if (message.role === "assistant") {
+      console.log("[Streaming]", message.id, message.content)
+    }
+  }, [message.content])
+
   const {
     assistants,
     profile,
@@ -125,6 +131,24 @@ export const Message: FC<MessageProps> = ({
       input.setSelectionRange(input.value.length, input.value.length)
     }
   }, [isEditing])
+
+  const getDisplayContent = (): string => {
+    const isStreamingTempMessage =
+      message.role === "assistant" &&
+      typeof message.id === "string" &&
+      message.id.startsWith("temp")
+
+    if (isStreamingTempMessage) {
+      return message.content // real-time stream
+    }
+
+    try {
+      const parsed = JSON.parse(message.content)
+      return parsed?.message?.content || message.content
+    } catch {
+      return message.content
+    }
+  }
 
   const MODEL_DATA = [
     ...models.map(model => ({
@@ -227,16 +251,13 @@ export const Message: FC<MessageProps> = ({
                     width={ICON_SIZE}
                   />
                 ) : (
-                  <WithTooltip
-                    display={<div>{MODEL_DATA?.modelName}</div>}
-                    trigger={
-                      <ModelIcon
-                        provider={modelDetails?.provider || "custom"}
-                        height={ICON_SIZE}
-                        width={ICON_SIZE}
-                      />
-                    }
-                  />
+                  <WithTooltip display={<div>{MODEL_DATA?.modelName}</div>}>
+                    <ModelIcon
+                      provider={modelDetails?.provider || "custom"}
+                      height={ICON_SIZE}
+                      width={ICON_SIZE}
+                    />
+                  </WithTooltip>
                 )
               ) : profile?.image_url ? (
                 <Image
@@ -305,7 +326,7 @@ export const Message: FC<MessageProps> = ({
               maxRows={20}
             />
           ) : (
-            <MessageMarkdown content={message.content} />
+            <MessageMarkdown content={getDisplayContent()} />
           )}
         </div>
 

@@ -22,6 +22,7 @@ import {
   processResponse,
   validateChatSettings
 } from "../chat-helpers"
+import type { ProcessResponseResult } from "../chat-helpers"
 
 export const useChatHandler = () => {
   const router = useRouter()
@@ -410,11 +411,8 @@ export const useChatHandler = () => {
         })
       })
 
-      const resData = await response.json()
-
-      if (!response.ok || !resData) {
-        throw new Error("Failed to get response from OpenAI API")
-      }
+      let resData: any = {}
+      // ❗ Don't parse response or clone it before streaming
 
       const toolCall = resData?.message?.tool_calls?.[0]
 
@@ -442,7 +440,7 @@ export const useChatHandler = () => {
             })
           })
 
-          generatedText = await processResponse(
+          const toolRes: ProcessResponseResult = await processResponse(
             followupRes,
             tempAssistantChatMessage,
             true,
@@ -451,6 +449,12 @@ export const useChatHandler = () => {
             setChatMessages,
             setToolInUse
           )
+
+          generatedText =
+            typeof toolRes === "string"
+              ? toolRes
+              : toolRes?.message?.content ||
+                "Tool responded but no content was returned."
 
           // ✅ Ensure the chat exists before saving messages
           if (!currentChat) {
@@ -494,17 +498,23 @@ export const useChatHandler = () => {
         throw new Error("Missing chat settings or workspace.")
       }
 
-      generatedText = await processResponse(
+      const finalRes: ProcessResponseResult = await processResponse(
         response,
         isRegeneration
           ? payload.chatMessages[payload.chatMessages.length - 1]
           : tempAssistantChatMessage,
-        true,
+        false,
         newAbortController,
         setFirstTokenReceived,
         setChatMessages,
         setToolInUse
       )
+
+      generatedText =
+        typeof finalRes === "string"
+          ? finalRes
+          : finalRes?.message?.content ||
+            "Assistant responded but no content was returned."
 
       if (!currentChat) {
         currentChat = await handleCreateChat(

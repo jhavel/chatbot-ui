@@ -1,7 +1,20 @@
-const { getDiff } = require("./getDiff")
+import { diffLines } from "diff"
 
-const oldCode = `function greet() { console.log("Hello") }`
-const newCode = `function greet() { console.log("Hi there") }`
+function getDiff(oldCode: string, newCode: string): string {
+  const changes = diffLines(oldCode, newCode)
 
-const diff = getDiff(oldCode, newCode)
-console.log(diff)
+  let result = ""
+
+  for (const part of changes) {
+    const prefix = part.added ? "+ " : part.removed ? "- " : "  "
+    const lines = part.value.split("\n")
+    for (const line of lines) {
+      if (line.trim() === "") continue
+      result += `${prefix}${line}\n`
+    }
+  }
+
+  return result.trim()
+}
+
+module.exports = { getDiff }
