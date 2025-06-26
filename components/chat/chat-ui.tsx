@@ -147,6 +147,9 @@ export const ChatUI: FC<ChatUIProps> = ({}) => {
       }
     })
 
+    console.log(
+      "[DEBUG] setChatMessages(fetchedChatMessages) called in fetchMessages"
+    )
     setChatMessages(fetchedChatMessages)
   }
 

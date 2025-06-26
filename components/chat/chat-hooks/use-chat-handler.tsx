@@ -84,6 +84,7 @@ export const useChatHandler = () => {
     if (!selectedWorkspace) return
 
     setUserInput("")
+    console.log("[DEBUG] setChatMessages([]) called in handleNewChat")
     setChatMessages([])
     setSelectedChat(null)
     setChatFileItems([])
@@ -623,6 +624,9 @@ export const useChatHandler = () => {
       chatMessage => chatMessage.message.sequence_number < sequenceNumber
     )
 
+    console.log(
+      "[DEBUG] setChatMessages(filteredMessages) called in handleSendEdit"
+    )
     setChatMessages(filteredMessages)
 
     handleSendMessage(editedContent, filteredMessages, false)
