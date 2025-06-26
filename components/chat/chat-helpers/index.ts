@@ -525,15 +525,25 @@ export const handleCreateMessages = async (
     setChatMessages(finalChatMessages)
   }
 
-  // Save to memory if assistant response includes "I'll remember"
+  // Enhanced memory saving with semantic processing
   if (
     generatedText.toLowerCase().includes("i'll remember") ||
     generatedText.toLowerCase().includes("i will remember")
   ) {
     try {
-      await saveMemory(generatedText, profile.user_id)
+      // Use the enhanced memory system instead of simple save
+      const { saveEnhancedMemory } = await import("@/lib/memory-system")
+      await saveEnhancedMemory(generatedText, profile.user_id)
+      console.log("🧠 Enhanced memory saved with semantic processing")
     } catch (err) {
-      console.error("Failed to save memory:", err)
+      console.error("Failed to save enhanced memory:", err)
+      // Fallback to simple memory save
+      try {
+        const { saveMemory } = await import("@/lib/supabase/memories")
+        await saveMemory(generatedText, profile.user_id)
+      } catch (fallbackErr) {
+        console.error("Failed to save memory (fallback):", fallbackErr)
+      }
     }
   }
 }
