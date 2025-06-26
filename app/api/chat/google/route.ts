@@ -34,7 +34,7 @@ export async function POST(request: Request) {
     const readableStream = new ReadableStream({
       async start(controller) {
         for await (const chunk of response.stream) {
-          const chunkText = chunk.text()
+          const chunkText = await chunk.text()
           // Wrap in OpenAI-style JSON
           const jsonLine = `data: ${JSON.stringify({ choices: [{ delta: { content: chunkText } }] })}\n`
           controller.enqueue(encoder.encode(jsonLine))
