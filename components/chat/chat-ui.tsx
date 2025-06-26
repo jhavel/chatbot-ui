@@ -38,7 +38,8 @@ export const ChatUI: FC<ChatUIProps> = ({}) => {
     setChatFiles,
     setShowFilesDisplay,
     setUseRetrieval,
-    setSelectedTools
+    setSelectedTools,
+    isGenerating
   } = useContext(ChatbotUIContext)
 
   const { handleNewChat, handleFocusChatInput } = useChatHandler()
@@ -58,14 +59,13 @@ export const ChatUI: FC<ChatUIProps> = ({}) => {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
+    if (isGenerating) return
     const fetchData = async () => {
       await fetchMessages()
       await fetchChat()
-
       scrollToBottom()
       setIsAtBottom(true)
     }
-
     if (params.chatid) {
       fetchData().then(() => {
         handleFocusChatInput()
@@ -74,7 +74,7 @@ export const ChatUI: FC<ChatUIProps> = ({}) => {
     } else {
       setLoading(false)
     }
-  }, [])
+  }, [params.chatid, isGenerating])
 
   const fetchMessages = async () => {
     const fetchedMessages = await getMessagesByChatId(params.chatid as string)
