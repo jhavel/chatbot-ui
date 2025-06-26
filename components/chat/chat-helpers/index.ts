@@ -350,15 +350,16 @@ export const processResponse = async (
         if (content) {
           setFirstTokenReceived(true)
           setToolInUse("none")
-          fullText += content
           setChatMessages(prev => {
+            let newFullText = ""
             const updated = prev.map(chatMessage => {
               if (chatMessage.message.id === lastChatMessage.message.id) {
+                newFullText = (chatMessage.message.content || "") + content
                 const newMsg = {
                   ...chatMessage,
                   message: {
                     ...chatMessage.message,
-                    content: fullText
+                    content: newFullText
                   }
                 }
                 return newMsg
@@ -370,7 +371,7 @@ export const processResponse = async (
               "[processResponse] Updating message:",
               lastChatMessage.message.id,
               "with content:",
-              fullText
+              newFullText
             )
             return [...updated]
           })
@@ -406,15 +407,16 @@ export const processResponse = async (
         if (content) {
           setFirstTokenReceived(true)
           setToolInUse("none")
-          fullText += content
           setChatMessages(prev => {
+            let newFullText = ""
             const updated = prev.map(chatMessage => {
               if (chatMessage.message.id === lastChatMessage.message.id) {
+                newFullText = (chatMessage.message.content || "") + content
                 const newMsg = {
                   ...chatMessage,
                   message: {
                     ...chatMessage.message,
-                    content: fullText
+                    content: newFullText
                   }
                 }
                 return newMsg
@@ -426,7 +428,7 @@ export const processResponse = async (
               "[processResponse] Updating message:",
               lastChatMessage.message.id,
               "with content:",
-              fullText
+              newFullText
             )
             return [...updated]
           })
@@ -445,15 +447,18 @@ export const processResponse = async (
         const parsed = JSON.parse(messageData)
         const content = parsed.choices?.[0]?.delta?.content
         if (content) {
-          fullText += content
+          setFirstTokenReceived(true)
+          setToolInUse("none")
           setChatMessages(prev => {
+            let newFullText = ""
             const updated = prev.map(chatMessage => {
               if (chatMessage.message.id === lastChatMessage.message.id) {
+                newFullText = (chatMessage.message.content || "") + content
                 const newMsg = {
                   ...chatMessage,
                   message: {
                     ...chatMessage.message,
-                    content: fullText
+                    content: newFullText
                   }
                 }
                 return newMsg
@@ -465,7 +470,7 @@ export const processResponse = async (
               "[processResponse] (final buffer) Updating message:",
               lastChatMessage.message.id,
               "with content:",
-              fullText
+              newFullText
             )
             return [...updated]
           })
