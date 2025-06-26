@@ -399,7 +399,14 @@ export async function POST(request: Request) {
     }
 
     console.log("Returning StreamingTextResponse")
-    return new StreamingTextResponse(openaiStream)
+    return new StreamingTextResponse(openaiStream, {
+      headers: {
+        "Content-Type": "text/event-stream; charset=utf-8",
+        "Cache-Control": "no-cache",
+        Connection: "keep-alive",
+        "X-Accel-Buffering": "no"
+      }
+    })
   } catch (error: any) {
     let errorMessage = error.message || "An unexpected error occurred"
     const errorCode = error.status || 500
@@ -428,3 +435,4 @@ export async function POST(request: Request) {
 
 export const dynamic = "force-dynamic"
 export const maxDuration = 30
+export const runtime = "edge"
