@@ -339,32 +339,11 @@ export async function POST(request: Request) {
     console.log("[OpenAI] Response body exists:", !!response.body)
     console.log("[OpenAI] Response body type:", typeof response.body)
 
-    // Log the first 500 bytes of the response body for debugging
-    let streamForOpenAIStream = response.body
-    if (response.body) {
-      const reader = response.body.getReader()
-      const { value } = await reader.read()
-      const preview = new TextDecoder().decode(value || new Uint8Array())
-      console.log("[OpenAI] First chunk preview:", preview.slice(0, 500))
-      // Re-create the stream for OpenAIStream by concatenating the preview and the rest
-      streamForOpenAIStream = new ReadableStream({
-        async start(controller) {
-          if (value) controller.enqueue(value)
-          while (true) {
-            const { done, value: chunk } = await reader.read()
-            if (done) break
-            controller.enqueue(chunk)
-          }
-          controller.close()
-        }
-      })
-    }
-
     // Always return a streaming response
     console.log("[OpenAI] About to call OpenAIStream...")
     let openaiStream
     try {
-      openaiStream = OpenAIStream({ ...response, body: streamForOpenAIStream })
+      openaiStream = OpenAIStream(response)
       console.log("[OpenAI] OpenAIStream result type:", typeof openaiStream)
       console.log("[OpenAI] OpenAIStream result:", openaiStream)
     } catch (error) {
