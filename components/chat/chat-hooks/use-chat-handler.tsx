@@ -445,6 +445,9 @@ export const useChatHandler = () => {
             function: { name, description, parameters }
           }))
         })
+      }).catch(err => {
+        console.error("[DEBUG] fetch /api/chat/openai error:", err)
+        throw err
       })
 
       let resData: any = {}
