@@ -319,8 +319,25 @@ export async function POST(request: Request) {
       Array.from(response.headers.entries())
     )
 
+    // If the response is not ok, stream an error
+    if (!response.ok) {
+      const errorText = await response.text()
+      console.error("OpenAI API error:", errorText)
+      const encoder = new TextEncoder()
+      const stream = new ReadableStream({
+        start(controller) {
+          const errorData = `data: ${JSON.stringify({ choices: [{ delta: { content: errorText } }] })}\n`
+          controller.enqueue(encoder.encode(errorData))
+          controller.enqueue(encoder.encode("data: [DONE]\n"))
+          controller.close()
+        }
+      })
+      return new StreamingTextResponse(stream, { status: response.status })
+    }
+
+    // Always return a streaming response
     const openaiStream = OpenAIStream(response)
-    console.log("Returning OpenAIStream:", typeof openaiStream, openaiStream)
+    console.log("Returning StreamingTextResponse")
     return new StreamingTextResponse(openaiStream)
   } catch (error: any) {
     let errorMessage = error.message || "An unexpected error occurred"
