@@ -5,31 +5,74 @@ import { cookies } from "next/headers"
 
 export async function getServerProfile() {
   const cookieStore = cookies()
+  // Debug: log all cookies
+  console.log(
+    "[getServerProfile] Cookies:",
+    cookieStore.getAll().map(c => ({ name: c.name, value: c.value }))
+  )
   const supabase = createServerClient<Database>(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
       cookies: {
         get(name: string) {
-          return cookieStore.get(name)?.value
+          const value = cookieStore.get(name)?.value
+          console.log(`[getServerProfile] Cookie get: ${name} = ${value}`)
+          return value
         }
       }
     }
   )
 
-  const user = (await supabase.auth.getUser()).data.user
+  const userResult = await supabase.auth.getUser()
+  console.log("[getServerProfile] supabase.auth.getUser() result:", userResult)
+  const user = userResult.data.user
   if (!user) {
-    throw new Error("User not found")
+    console.log("[getServerProfile] No user found in session!")
+    throw new Error("User not found (no Supabase user in session)")
   }
 
-  const { data: profile } = await supabase
+  let { data: profile, error: profileError } = await supabase
     .from("profiles")
     .select("*")
     .eq("user_id", user.id)
     .single()
+  console.log("[getServerProfile] Profile lookup:", profile, profileError)
 
   if (!profile) {
-    throw new Error("Profile not found")
+    // Auto-create profile if missing
+    const email = user.email || "user@example.com"
+    const displayName = email.split("@")[0]
+    // Sanitize username: only letters, numbers, underscores, 3-25 chars
+    const username = displayName.replace(/[^a-zA-Z0-9_]/g, "_").slice(0, 25)
+    const newProfile = {
+      user_id: user.id,
+      display_name: displayName,
+      username: username.length >= 3 ? username : `user_${user.id.slice(0, 8)}`,
+      bio: "",
+      has_onboarded: false,
+      image_url: "",
+      image_path: "",
+      profile_context: "",
+      use_azure_openai: false
+    }
+    const { data: createdProfile, error } = await supabase
+      .from("profiles")
+      .insert([newProfile])
+      .select("*")
+      .single()
+    console.log(
+      "[getServerProfile] Auto-created profile:",
+      createdProfile,
+      error
+    )
+    if (!createdProfile || error) {
+      throw new Error(
+        "Failed to auto-create user profile: " +
+          (error?.message || "Unknown error")
+      )
+    }
+    profile = createdProfile
   }
 
   const profileWithKeys = addApiKeysToProfile(profile)

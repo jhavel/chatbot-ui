@@ -1,6 +1,7 @@
 import { checkApiKey, getServerProfile } from "@/lib/server/server-chat-helpers"
 import { ChatSettings } from "@/types"
 import { GoogleGenerativeAI } from "@google/generative-ai"
+import { StreamingTextResponse } from "ai"
 
 export const runtime = "edge"
 
@@ -35,6 +36,8 @@ export async function POST(request: Request) {
       async start(controller) {
         for await (const chunk of response.stream) {
           const chunkText = await chunk.text()
+          // Debug: log each chunk sent
+          console.log("[Google Gemini] Streaming chunk:", chunkText)
           // Wrap in OpenAI-style JSON
           const jsonLine = `data: ${JSON.stringify({ choices: [{ delta: { content: chunkText } }] })}\n`
           controller.enqueue(encoder.encode(jsonLine))
@@ -43,9 +46,7 @@ export async function POST(request: Request) {
       }
     })
 
-    return new Response(readableStream, {
-      headers: { "Content-Type": "text/plain" }
-    })
+    return new StreamingTextResponse(readableStream)
   } catch (error: any) {
     let errorMessage = error.message || "An unexpected error occurred"
     const errorCode = error.status || 500

@@ -287,28 +287,50 @@ export async function POST(request: Request) {
     const profile = await getServerProfile()
     checkApiKey(profile.openai_api_key, "OpenAI")
 
-    const openai = new OpenAI({
-      apiKey: profile.openai_api_key || "",
-      organization: profile.openai_organization_id
+    // Use fetch to call OpenAI API directly for streaming
+    const response = await fetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${profile.openai_api_key}`,
+        "Content-Type": "application/json",
+        ...(profile.openai_organization_id
+          ? { "OpenAI-Organization": profile.openai_organization_id }
+          : {})
+      },
+      body: JSON.stringify({
+        model: chatSettings.model,
+        messages: finalMessages,
+        temperature: chatSettings.temperature,
+        max_tokens:
+          chatSettings.model === "gpt-4-vision-preview" ||
+          chatSettings.model === "gpt-4o"
+            ? 4096
+            : null,
+        tools: fileTools.map(({ name, description, parameters }) => ({
+          type: "function",
+          function: { name, description, parameters }
+        })),
+        stream: true
+      })
     })
 
-    const stream = await openai.chat.completions.create({
-      model: chatSettings.model as ChatCompletionCreateParamsBase["model"],
-      messages: finalMessages as ChatCompletionCreateParamsBase["messages"],
-      temperature: chatSettings.temperature,
-      max_tokens:
-        chatSettings.model === "gpt-4-vision-preview" ||
-        chatSettings.model === "gpt-4o"
-          ? 4096
-          : null,
-      tools: fileTools.map(({ name, description, parameters }) => ({
-        type: "function",
-        function: { name, description, parameters }
-      })),
-      stream: true
-    })
+    // Log headers and status for debugging
+    console.log("[OpenAI fetch] Response status:", response.status)
+    console.log(
+      "[OpenAI fetch] Response headers:",
+      Array.from(response.headers.entries())
+    )
 
-    const openaiStream = OpenAIStream(stream as any)
+    // Clone the response to peek at the first 500 characters for debugging
+    const responseClone = response.clone()
+    const textPreview = await responseClone.text()
+    console.log(
+      "[OpenAI fetch] Preview of response body:",
+      textPreview.slice(0, 500)
+    )
+
+    const openaiStream = OpenAIStream(response)
+    console.log("Returning OpenAIStream:", typeof openaiStream, openaiStream)
     return new StreamingTextResponse(openaiStream)
   } catch (error: any) {
     let errorMessage = error.message || "An unexpected error occurred"

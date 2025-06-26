@@ -124,7 +124,7 @@ export const createTempMessages = (
       assistant_id: selectedAssistant?.id || null,
       content: "",
       created_at: "",
-      id: uuidv4(),
+      id: `temp-${uuidv4()}`,
       image_paths: [],
       model: chatSettings.model,
       role: "assistant",
@@ -186,7 +186,12 @@ export const handleLocalChat = async (
     setIsGenerating,
     setChatMessages
   )
-
+  console.log(
+    "[handleLocalChat] fetchChatResponse returned:",
+    response,
+    "response.body:",
+    response.body
+  )
   return await processResponse(
     response,
     isRegeneration
@@ -248,7 +253,12 @@ export const handleHostedChat = async (
     setIsGenerating,
     setChatMessages
   )
-
+  console.log(
+    "[handleHostedChat] fetchChatResponse returned:",
+    response,
+    "response.body:",
+    response.body
+  )
   return await processResponse(
     response,
     isRegeneration
@@ -270,28 +280,34 @@ export const fetchChatResponse = async (
   setIsGenerating: React.Dispatch<React.SetStateAction<boolean>>,
   setChatMessages: React.Dispatch<React.SetStateAction<ChatMessage[]>>
 ) => {
-  const response = await fetch(url, {
-    method: "POST",
-    body: JSON.stringify(body),
-    signal: controller.signal
-  })
+  try {
+    const response = await fetch(url, {
+      method: "POST",
+      body: JSON.stringify(body),
+      signal: controller.signal
+    })
 
-  if (!response.ok) {
-    if (response.status === 404 && !isHosted) {
-      toast.error(
-        "Model not found. Make sure you have it downloaded via Ollama."
-      )
+    if (!response.ok) {
+      if (response.status === 404 && !isHosted) {
+        toast.error(
+          "Model not found. Make sure you have it downloaded via Ollama."
+        )
+      }
+
+      const errorData = await response.json()
+
+      toast.error(errorData.message)
+
+      setIsGenerating(false)
+      setChatMessages(prevMessages => prevMessages.slice(0, -2))
+      console.error("[fetchChatResponse] Error response:", response, errorData)
     }
 
-    const errorData = await response.json()
-
-    toast.error(errorData.message)
-
-    setIsGenerating(false)
-    setChatMessages(prevMessages => prevMessages.slice(0, -2))
+    return response
+  } catch (err) {
+    console.error("[fetchChatResponse] Thrown error:", err)
+    throw err
   }
-
-  return response
 }
 
 export const processResponse = async (
@@ -303,55 +319,159 @@ export const processResponse = async (
   setChatMessages: React.Dispatch<React.SetStateAction<ChatMessage[]>>,
   setToolInUse: React.Dispatch<React.SetStateAction<string>>
 ): Promise<ProcessResponseResult> => {
+  console.log("[processResponse] called. Response:", response)
   let fullText = ""
-
   if (!response.body) {
+    console.error("[processResponse] ERROR: response.body is null")
     throw new Error("Response body is null")
   }
 
   const reader = response.body.getReader()
   const decoder = new TextDecoder("utf-8")
   let done = false
+  let buffer = ""
 
-  while (!done) {
-    const { value, done: doneReading } = await reader.read()
-    done = doneReading
-
-    const chunkValue = decoder.decode(value)
-    const lines = chunkValue.split("\n").filter(line => line.trim() !== "")
-
+  // Log the first chunk
+  const firstRead = await reader.read()
+  console.log("[processResponse] First chunk from stream:", firstRead)
+  if (firstRead.value) {
+    const firstDecoded = decoder.decode(firstRead.value)
+    console.log("[processResponse] First decoded buffer:", firstDecoded)
+    buffer += firstDecoded
+    let lines = buffer.split("\n")
+    buffer = lines.pop() || ""
     for (const line of lines) {
-      if (line === "data: [DONE]") continue
-
+      if (!line.startsWith("data: ")) continue
       const messageData = line.replace(/^data: /, "")
-
+      if (messageData === "[DONE]") continue
       try {
         const parsed = JSON.parse(messageData)
         const content = parsed.choices?.[0]?.delta?.content
-
         if (content) {
           setFirstTokenReceived(true)
           setToolInUse("none")
-
           fullText += content
-
-          setChatMessages(prev =>
-            prev.map(chatMessage => {
+          setChatMessages(prev => {
+            const updated = prev.map(chatMessage => {
               if (chatMessage.message.id === lastChatMessage.message.id) {
-                return {
+                const newMsg = {
                   ...chatMessage,
                   message: {
                     ...chatMessage.message,
                     content: fullText
                   }
                 }
+                return newMsg
               }
               return chatMessage
             })
-          )
+            // Debug log
+            console.log(
+              "[processResponse] Updating message:",
+              lastChatMessage.message.id,
+              "with content:",
+              fullText
+            )
+            return [...updated]
+          })
         }
       } catch (err) {
-        console.error("Streaming parse error:", err)
+        console.error("Streaming parse error:", err, messageData)
+      }
+    }
+  }
+  done = firstRead.done
+
+  while (!done) {
+    const { value, done: doneReading } = await reader.read()
+    console.log("[processResponse] Streaming loop chunk:", {
+      value,
+      done: doneReading
+    })
+    const decoded = value ? decoder.decode(value) : ""
+    console.log("[processResponse] Decoded chunk:", decoded)
+    done = doneReading
+    buffer += decoded
+
+    let lines = buffer.split("\n")
+    buffer = lines.pop() || "" // Save incomplete line for next chunk
+
+    for (const line of lines) {
+      if (!line.startsWith("data: ")) continue
+      const messageData = line.replace(/^data: /, "")
+      if (messageData === "[DONE]") continue
+      try {
+        const parsed = JSON.parse(messageData)
+        const content = parsed.choices?.[0]?.delta?.content
+        if (content) {
+          setFirstTokenReceived(true)
+          setToolInUse("none")
+          fullText += content
+          setChatMessages(prev => {
+            const updated = prev.map(chatMessage => {
+              if (chatMessage.message.id === lastChatMessage.message.id) {
+                const newMsg = {
+                  ...chatMessage,
+                  message: {
+                    ...chatMessage.message,
+                    content: fullText
+                  }
+                }
+                return newMsg
+              }
+              return chatMessage
+            })
+            // Debug log
+            console.log(
+              "[processResponse] Updating message:",
+              lastChatMessage.message.id,
+              "with content:",
+              fullText
+            )
+            return [...updated]
+          })
+        }
+      } catch (err) {
+        console.error("Streaming parse error:", err, messageData)
+      }
+    }
+  }
+
+  // Handle any remaining buffer after the stream ends
+  if (buffer.trim() && buffer.startsWith("data: ")) {
+    const messageData = buffer.replace(/^data: /, "")
+    if (messageData !== "[DONE]") {
+      try {
+        const parsed = JSON.parse(messageData)
+        const content = parsed.choices?.[0]?.delta?.content
+        if (content) {
+          fullText += content
+          setChatMessages(prev => {
+            const updated = prev.map(chatMessage => {
+              if (chatMessage.message.id === lastChatMessage.message.id) {
+                const newMsg = {
+                  ...chatMessage,
+                  message: {
+                    ...chatMessage.message,
+                    content: fullText
+                  }
+                }
+                return newMsg
+              }
+              return chatMessage
+            })
+            // Debug log
+            console.log(
+              "[processResponse] (final buffer) Updating message:",
+              lastChatMessage.message.id,
+              "with content:",
+              fullText
+            )
+            return [...updated]
+          })
+        }
+      } catch (err) {
+        console.error("Streaming parse error (final buffer):", err, messageData)
       }
     }
   }
