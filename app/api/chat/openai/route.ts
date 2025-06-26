@@ -9,8 +9,6 @@ import { getContextualMemories, saveMemory } from "@/db/memories"
 import { fileTools } from "@/lib/tools/fileTools"
 import { OpenAIStream, StreamingTextResponse } from "ai"
 
-export const runtime: ServerRuntime = "edge"
-
 // Helper function to extract important information for memory
 const extractImportantInfo = (messages: any[]): string[] => {
   const importantInfo: string[] = []
