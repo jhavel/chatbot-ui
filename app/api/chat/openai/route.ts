@@ -319,14 +319,6 @@ export async function POST(request: Request) {
       Array.from(response.headers.entries())
     )
 
-    // Clone the response to peek at the first 500 characters for debugging
-    const responseClone = response.clone()
-    const textPreview = await responseClone.text()
-    console.log(
-      "[OpenAI fetch] Preview of response body:",
-      textPreview.slice(0, 500)
-    )
-
     const openaiStream = OpenAIStream(response)
     console.log("Returning OpenAIStream:", typeof openaiStream, openaiStream)
     return new StreamingTextResponse(openaiStream)
