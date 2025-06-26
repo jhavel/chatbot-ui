@@ -52,14 +52,13 @@ export const MessageActions: FC<MessageActionsProps> = ({
           delayDuration={1000}
           side="bottom"
           display={<div>Fork Chat</div>}
-          trigger={
-            <IconGitFork
-              className="cursor-pointer hover:opacity-50"
-              size={MESSAGE_ICON_SIZE}
-              onClick={handleForkChat}
-            />
-          }
-        />
+        >
+          <IconGitFork
+            className="cursor-pointer hover:opacity-50"
+            size={MESSAGE_ICON_SIZE}
+            onClick={handleForkChat}
+          />
+        </WithTooltip>
       )} */}
 
       {!isAssistant && isHovering && (
@@ -67,14 +66,13 @@ export const MessageActions: FC<MessageActionsProps> = ({
           delayDuration={1000}
           side="bottom"
           display={<div>Edit</div>}
-          trigger={
-            <IconEdit
-              className="cursor-pointer hover:opacity-50"
-              size={MESSAGE_ICON_SIZE}
-              onClick={onEdit}
-            />
-          }
-        />
+        >
+          <IconEdit
+            className="cursor-pointer hover:opacity-50"
+            size={MESSAGE_ICON_SIZE}
+            onClick={onEdit}
+          />
+        </WithTooltip>
       )}
 
       {(isHovering || isLast) && (
@@ -82,18 +80,17 @@ export const MessageActions: FC<MessageActionsProps> = ({
           delayDuration={1000}
           side="bottom"
           display={<div>Copy</div>}
-          trigger={
-            showCheckmark ? (
-              <IconCheck size={MESSAGE_ICON_SIZE} />
-            ) : (
-              <IconCopy
-                className="cursor-pointer hover:opacity-50"
-                size={MESSAGE_ICON_SIZE}
-                onClick={handleCopy}
-              />
-            )
-          }
-        />
+        >
+          {showCheckmark ? (
+            <IconCheck size={MESSAGE_ICON_SIZE} />
+          ) : (
+            <IconCopy
+              className="cursor-pointer hover:opacity-50"
+              size={MESSAGE_ICON_SIZE}
+              onClick={handleCopy}
+            />
+          )}
+        </WithTooltip>
       )}
 
       {isLast && (
@@ -101,14 +98,13 @@ export const MessageActions: FC<MessageActionsProps> = ({
           delayDuration={1000}
           side="bottom"
           display={<div>Regenerate</div>}
-          trigger={
-            <IconRepeat
-              className="cursor-pointer hover:opacity-50"
-              size={MESSAGE_ICON_SIZE}
-              onClick={onRegenerate}
-            />
-          }
-        />
+        >
+          <IconRepeat
+            className="cursor-pointer hover:opacity-50"
+            size={MESSAGE_ICON_SIZE}
+            onClick={onRegenerate}
+          />
+        </WithTooltip>
       )}
 
       {/* {1 > 0 && isAssistant && <MessageReplies />} */}

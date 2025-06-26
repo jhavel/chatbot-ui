@@ -185,10 +185,9 @@ const AdvancedContent: FC<AdvancedContentProps> = ({
                 {profile?.profile_context || "No profile context."}
               </div>
             }
-            trigger={
-              <IconInfoCircle className="cursor-hover:opacity-50" size={16} />
-            }
-          />
+          >
+            <IconInfoCircle className="cursor-hover:opacity-50" size={16} />
+          </WithTooltip>
         )}
       </div>
 
@@ -214,10 +213,9 @@ const AdvancedContent: FC<AdvancedContentProps> = ({
                   "No workspace instructions."}
               </div>
             }
-            trigger={
-              <IconInfoCircle className="cursor-hover:opacity-50" size={16} />
-            }
-          />
+          >
+            <IconInfoCircle className="cursor-hover:opacity-50" size={16} />
+          </WithTooltip>
         )}
       </div>
 
