@@ -352,8 +352,14 @@ export const processResponse = async (
           setToolInUse("none")
           setChatMessages(prev => {
             let newFullText = ""
-            const updated = prev.map(chatMessage => {
-              if (chatMessage.message.id === lastChatMessage.message.id) {
+            const updated = prev.map((chatMessage, idx, arr) => {
+              const isLastTempAssistant =
+                chatMessage.message.role === "assistant" &&
+                typeof chatMessage.message.id === "string" &&
+                chatMessage.message.id.startsWith("temp-") &&
+                idx ===
+                  arr.map(m => m.message.id).lastIndexOf(chatMessage.message.id)
+              if (isLastTempAssistant) {
                 newFullText = (chatMessage.message.content || "") + content
                 const newMsg = {
                   ...chatMessage,
@@ -368,9 +374,7 @@ export const processResponse = async (
             })
             // Debug log
             console.log(
-              "[processResponse] Updating message:",
-              lastChatMessage.message.id,
-              "with content:",
+              "[processResponse] Updating temp assistant message with content:",
               newFullText
             )
             return [...updated]
@@ -409,8 +413,14 @@ export const processResponse = async (
           setToolInUse("none")
           setChatMessages(prev => {
             let newFullText = ""
-            const updated = prev.map(chatMessage => {
-              if (chatMessage.message.id === lastChatMessage.message.id) {
+            const updated = prev.map((chatMessage, idx, arr) => {
+              const isLastTempAssistant =
+                chatMessage.message.role === "assistant" &&
+                typeof chatMessage.message.id === "string" &&
+                chatMessage.message.id.startsWith("temp-") &&
+                idx ===
+                  arr.map(m => m.message.id).lastIndexOf(chatMessage.message.id)
+              if (isLastTempAssistant) {
                 newFullText = (chatMessage.message.content || "") + content
                 const newMsg = {
                   ...chatMessage,
@@ -425,9 +435,7 @@ export const processResponse = async (
             })
             // Debug log
             console.log(
-              "[processResponse] Updating message:",
-              lastChatMessage.message.id,
-              "with content:",
+              "[processResponse] Updating temp assistant message with content:",
               newFullText
             )
             return [...updated]
@@ -451,8 +459,14 @@ export const processResponse = async (
           setToolInUse("none")
           setChatMessages(prev => {
             let newFullText = ""
-            const updated = prev.map(chatMessage => {
-              if (chatMessage.message.id === lastChatMessage.message.id) {
+            const updated = prev.map((chatMessage, idx, arr) => {
+              const isLastTempAssistant =
+                chatMessage.message.role === "assistant" &&
+                typeof chatMessage.message.id === "string" &&
+                chatMessage.message.id.startsWith("temp-") &&
+                idx ===
+                  arr.map(m => m.message.id).lastIndexOf(chatMessage.message.id)
+              if (isLastTempAssistant) {
                 newFullText = (chatMessage.message.content || "") + content
                 const newMsg = {
                   ...chatMessage,
@@ -467,9 +481,7 @@ export const processResponse = async (
             })
             // Debug log
             console.log(
-              "[processResponse] (final buffer) Updating message:",
-              lastChatMessage.message.id,
-              "with content:",
+              "[processResponse] Updating temp assistant message with content:",
               newFullText
             )
             return [...updated]
