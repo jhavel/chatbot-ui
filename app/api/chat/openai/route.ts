@@ -7,6 +7,7 @@ import OpenAI from "openai"
 import { ChatCompletionCreateParamsBase } from "openai/resources/chat/completions.mjs"
 import { getContextualMemories, saveMemory } from "@/db/memories"
 import { fileTools } from "@/lib/tools/fileTools"
+import { OpenAIStream, StreamingTextResponse } from "ai"
 
 export const runtime: ServerRuntime = "edge"
 
@@ -307,26 +308,8 @@ export async function POST(request: Request) {
       stream: true
     })
 
-    const encoder = new TextEncoder()
-
-    const readable = new ReadableStream({
-      async start(controller) {
-        for await (const chunk of stream) {
-          controller.enqueue(
-            encoder.encode(`data: ${JSON.stringify(chunk)}\n\n`)
-          )
-        }
-        controller.close()
-      }
-    })
-
-    return new Response(readable, {
-      headers: {
-        "Content-Type": "text/event-stream",
-        "Cache-Control": "no-cache",
-        Connection: "keep-alive"
-      }
-    })
+    const openaiStream = OpenAIStream(stream as any)
+    return new StreamingTextResponse(openaiStream)
   } catch (error: any) {
     let errorMessage = error.message || "An unexpected error occurred"
     const errorCode = error.status || 500
