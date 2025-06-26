@@ -335,8 +335,69 @@ export async function POST(request: Request) {
       return new StreamingTextResponse(stream, { status: response.status })
     }
 
+    // Debug: Check if response.body exists
+    console.log("[OpenAI] Response body exists:", !!response.body)
+    console.log("[OpenAI] Response body type:", typeof response.body)
+
     // Always return a streaming response
-    const openaiStream = OpenAIStream(response)
+    console.log("[OpenAI] About to call OpenAIStream...")
+    let openaiStream
+    try {
+      openaiStream = OpenAIStream(response)
+      console.log("[OpenAI] OpenAIStream result type:", typeof openaiStream)
+      console.log("[OpenAI] OpenAIStream result:", openaiStream)
+    } catch (error) {
+      console.error("[OpenAI] OpenAIStream failed:", error)
+      // Fallback: manually create stream from OpenAI response
+      const encoder = new TextEncoder()
+      openaiStream = new ReadableStream({
+        async start(controller) {
+          const reader = response.body?.getReader()
+          if (!reader) {
+            controller.enqueue(
+              encoder.encode(
+                `data: ${JSON.stringify({ choices: [{ delta: { content: "Error: No response body" } }] })}\n`
+              )
+            )
+            controller.enqueue(encoder.encode("data: [DONE]\n"))
+            controller.close()
+            return
+          }
+
+          try {
+            while (true) {
+              const { done, value } = await reader.read()
+              if (done) break
+
+              const chunk = new TextDecoder().decode(value)
+              const lines = chunk.split("\n")
+
+              for (const line of lines) {
+                if (line.startsWith("data: ")) {
+                  const data = line.slice(6)
+                  if (data === "[DONE]") {
+                    controller.enqueue(encoder.encode("data: [DONE]\n"))
+                  } else {
+                    controller.enqueue(encoder.encode(line + "\n"))
+                  }
+                }
+              }
+            }
+          } catch (streamError) {
+            console.error("[OpenAI] Stream reading error:", streamError)
+            controller.enqueue(
+              encoder.encode(
+                `data: ${JSON.stringify({ choices: [{ delta: { content: "Error reading stream" } }] })}\n`
+              )
+            )
+          } finally {
+            controller.enqueue(encoder.encode("data: [DONE]\n"))
+            controller.close()
+          }
+        }
+      })
+    }
+
     console.log("Returning StreamingTextResponse")
     return new StreamingTextResponse(openaiStream)
   } catch (error: any) {
