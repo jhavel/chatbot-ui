@@ -424,8 +424,14 @@ export const useChatHandler = () => {
         chatImages
       )
 
-      console.log("calling OpenAI...")
-
+      console.log("[DEBUG] About to fetch /api/chat/openai with:", {
+        chatSettings: payload.chatSettings,
+        messages: formattedMessages,
+        tools: fileTools.map(({ name, description, parameters }) => ({
+          type: "function",
+          function: { name, description, parameters }
+        }))
+      })
       const response = await fetch("/api/chat/openai", {
         method: "POST",
         headers: {
