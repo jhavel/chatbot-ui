@@ -136,7 +136,7 @@ export const ChatUI: FC<ChatUIProps> = ({}) => {
     setUseRetrieval(true)
     setShowFilesDisplay(true)
 
-    const fetchedChatMessages = fetchedMessages.map(message => {
+    const fetchedChatMessages = fetchedMessages.map((message, idx) => {
       return {
         message,
         fileItems: messageFileItems
@@ -146,7 +146,6 @@ export const ChatUI: FC<ChatUIProps> = ({}) => {
           )
       }
     })
-
     console.log(
       "[DEBUG] setChatMessages(fetchedChatMessages) called in fetchMessages"
     )
