@@ -23,6 +23,7 @@ import {
   validateChatSettings
 } from "../chat-helpers"
 import type { ProcessResponseResult } from "../chat-helpers"
+import { getMemories } from "@/db/tools"
 
 export const useChatHandler = () => {
   const router = useRouter()
@@ -196,6 +197,35 @@ export const useChatHandler = () => {
     isRegeneration: boolean
   ) => {
     const startingInput = messageContent
+
+    // 🧠 Handle "how many memories" command
+    if (messageContent.toLowerCase().includes("how many memories")) {
+      const memories = await getMemories()
+
+      setChatMessages(prev => [
+        ...prev,
+        {
+          role: "assistant",
+          message: {
+            id: crypto.randomUUID(),
+            chat_id: selectedChat?.id || "temp-chat",
+            user_id: profile?.user_id || "temp-user",
+            assistant_id: selectedAssistant?.id || null,
+            model: chatSettings?.model || "gpt-4",
+            role: "assistant",
+            content: `You currently have ${memories.length} memories stored.`,
+            image_paths: [],
+            sequence_number: prev.length,
+            created_at: new Date().toISOString(),
+            updated_at: null
+          },
+          fileItems: []
+        }
+      ])
+
+      setIsGenerating(false)
+      return
+    }
 
     try {
       setUserInput("")

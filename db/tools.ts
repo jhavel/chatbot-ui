@@ -175,3 +175,62 @@ export const deleteToolWorkspace = async (
 
   return true
 }
+
+// === Memory Tools ===
+
+export const getMemories = async () => {
+  const { data, error } = await supabase
+    .from("memories")
+    .select("*")
+    .order("created_at", { ascending: false })
+
+  if (error) throw new Error(error.message)
+  return data
+}
+
+export const createMemory = async (content: string, user_id: string) => {
+  const { data, error } = await supabase
+    .from("memories")
+    .insert([{ content, user_id }])
+    .select("*")
+    .single()
+
+  if (error) throw new Error(error.message)
+  return data
+}
+
+export const updateMemory = async (id: string, content: string) => {
+  console.log("📝 Attempting to update memory:", { id, content })
+
+  const { data, error } = await supabase
+    .from("memories")
+    .update({ content })
+    .eq("id", id)
+    .select("*")
+    .single()
+
+  if (error) {
+    console.error("❌ UPDATE error:", error)
+    throw new Error(error.message)
+  }
+
+  if (!data) {
+    console.warn("⚠️ No memory updated for id:", id)
+  }
+
+  return data
+}
+
+export const deleteMemory = async (id: string) => {
+  console.log("🗑️ Attempting to delete memory:", id)
+
+  const { error } = await supabase.from("memories").delete().eq("id", id)
+
+  if (error) {
+    console.error("❌ DELETE error:", error)
+    throw new Error(error.message)
+  }
+
+  console.log("✅ Memory deleted:", id)
+  return true
+}
