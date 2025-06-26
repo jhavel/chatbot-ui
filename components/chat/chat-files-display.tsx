@@ -263,21 +263,20 @@ const RetrievalToggle = ({}) => {
               : "Click the indicator to enable file retrieval for this message."}
           </div>
         }
-        trigger={
-          <IconCircleFilled
-            className={cn(
-              "p-1",
-              useRetrieval ? "text-green-500" : "text-red-500",
-              useRetrieval ? "hover:text-green-200" : "hover:text-red-200"
-            )}
-            size={24}
-            onClick={e => {
-              e.stopPropagation()
-              setUseRetrieval(prev => !prev)
-            }}
-          />
-        }
-      />
+      >
+        <IconCircleFilled
+          className={cn(
+            "p-1",
+            useRetrieval ? "text-green-500" : "text-red-500",
+            useRetrieval ? "hover:text-green-200" : "hover:text-red-200"
+          )}
+          size={24}
+          onClick={e => {
+            e.stopPropagation()
+            setUseRetrieval(prev => !prev)
+          }}
+        />
+      </WithTooltip>
     </div>
   )
 }
