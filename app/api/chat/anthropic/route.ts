@@ -7,6 +7,8 @@ import { AnthropicStream, StreamingTextResponse } from "ai"
 import { NextRequest, NextResponse } from "next/server"
 
 export const runtime = "edge"
+export const dynamic = "force-dynamic"
+export const maxDuration = 30
 
 export async function POST(request: NextRequest) {
   const json = await request.json()

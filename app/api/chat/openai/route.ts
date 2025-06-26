@@ -340,3 +340,6 @@ export async function POST(request: Request) {
     })
   }
 }
+
+export const dynamic = "force-dynamic"
+export const maxDuration = 30

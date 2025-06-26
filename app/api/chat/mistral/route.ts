@@ -5,6 +5,8 @@ import { OpenAIStream, StreamingTextResponse } from "ai"
 import OpenAI from "openai"
 
 export const runtime = "edge"
+export const dynamic = "force-dynamic"
+export const maxDuration = 30
 
 export async function POST(request: Request) {
   const json = await request.json()

@@ -4,6 +4,8 @@ import { GoogleGenerativeAI } from "@google/generative-ai"
 import { StreamingTextResponse } from "ai"
 
 export const runtime = "edge"
+export const dynamic = "force-dynamic"
+export const maxDuration = 30
 
 export async function POST(request: Request) {
   const json = await request.json()
