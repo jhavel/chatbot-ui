@@ -87,12 +87,17 @@ export async function POST(request: NextRequest) {
       }
     } catch (error: any) {
       console.error("Error calling Anthropic API:", error)
-      return new NextResponse(
-        JSON.stringify({
-          message: "An error occurred while calling the Anthropic API"
-        }),
-        { status: 500 }
-      )
+      // Stream the error message in SSE format
+      const encoder = new TextEncoder()
+      const stream = new ReadableStream({
+        start(controller) {
+          const errorData = `data: ${JSON.stringify({ choices: [{ delta: { content: "An error occurred while calling the Anthropic API" } }] })}\n`
+          controller.enqueue(encoder.encode(errorData))
+          controller.enqueue(encoder.encode("data: [DONE]\n"))
+          controller.close()
+        }
+      })
+      return new StreamingTextResponse(stream, { status: 500 })
     }
   } catch (error: any) {
     let errorMessage = error.message || "An unexpected error occurred"
@@ -105,9 +110,16 @@ export async function POST(request: NextRequest) {
       errorMessage =
         "Anthropic API Key is incorrect. Please fix it in your profile settings."
     }
-
-    return new NextResponse(JSON.stringify({ message: errorMessage }), {
-      status: errorCode
+    // Stream the error message in SSE format
+    const encoder = new TextEncoder()
+    const stream = new ReadableStream({
+      start(controller) {
+        const errorData = `data: ${JSON.stringify({ choices: [{ delta: { content: errorMessage } }] })}\n`
+        controller.enqueue(encoder.encode(errorData))
+        controller.enqueue(encoder.encode("data: [DONE]\n"))
+        controller.close()
+      }
     })
+    return new StreamingTextResponse(stream, { status: errorCode })
   }
 }

@@ -45,9 +45,16 @@ export async function POST(request: Request) {
       errorMessage =
         "OpenRouter API Key not found. Please set it in your profile settings."
     }
-
-    return new Response(JSON.stringify({ message: errorMessage }), {
-      status: errorCode
+    // Stream the error message in SSE format
+    const encoder = new TextEncoder()
+    const stream = new ReadableStream({
+      start(controller) {
+        const errorData = `data: ${JSON.stringify({ choices: [{ delta: { content: errorMessage } }] })}\n`
+        controller.enqueue(encoder.encode(errorData))
+        controller.enqueue(encoder.encode("data: [DONE]\n"))
+        controller.close()
+      }
     })
+    return new StreamingTextResponse(stream, { status: errorCode })
   }
 }
