@@ -373,6 +373,8 @@ export const processResponse = async (
               return chatMessage
             })
             // Debug log
+            console.log("[processResponse] setChatMessages prev:", prev)
+            console.log("[processResponse] setChatMessages updated:", updated)
             console.log(
               "[processResponse] Updating temp assistant message with content:",
               newFullText
@@ -434,6 +436,8 @@ export const processResponse = async (
               return chatMessage
             })
             // Debug log
+            console.log("[processResponse] setChatMessages prev:", prev)
+            console.log("[processResponse] setChatMessages updated:", updated)
             console.log(
               "[processResponse] Updating temp assistant message with content:",
               newFullText
@@ -480,6 +484,8 @@ export const processResponse = async (
               return chatMessage
             })
             // Debug log
+            console.log("[processResponse] setChatMessages prev:", prev)
+            console.log("[processResponse] setChatMessages updated:", updated)
             console.log(
               "[processResponse] Updating temp assistant message with content:",
               newFullText
