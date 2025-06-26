@@ -582,6 +582,7 @@ export const useChatHandler = () => {
         })
       }
 
+      // Persist the streamed assistant message after streaming ends
       await handleCreateMessages(
         chatMessages,
         currentChat,
