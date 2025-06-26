@@ -351,6 +351,7 @@ export const processResponse = async (
           setFirstTokenReceived(true)
           setToolInUse("none")
           setChatMessages(prev => {
+            console.log("[processResponse] setChatMessages updater called")
             let newFullText = ""
             const updated = prev.map((chatMessage, idx, arr) => {
               const isLastTempAssistant =
@@ -414,6 +415,7 @@ export const processResponse = async (
           setFirstTokenReceived(true)
           setToolInUse("none")
           setChatMessages(prev => {
+            console.log("[processResponse] setChatMessages updater called")
             let newFullText = ""
             const updated = prev.map((chatMessage, idx, arr) => {
               const isLastTempAssistant =
@@ -462,6 +464,7 @@ export const processResponse = async (
           setFirstTokenReceived(true)
           setToolInUse("none")
           setChatMessages(prev => {
+            console.log("[processResponse] setChatMessages updater called")
             let newFullText = ""
             const updated = prev.map((chatMessage, idx, arr) => {
               const isLastTempAssistant =
