@@ -8,14 +8,14 @@ interface ChatMessagesProps {}
 
 export const ChatMessages: FC<ChatMessagesProps> = ({}) => {
   const { chatMessages, chatFileItems } = useContext(ChatbotUIContext)
-  console.log(
-    "[DEBUG] Rendering chatMessages:",
-    chatMessages.map(m => ({
-      id: m.message.id,
-      role: m.message.role,
-      content: m.message.content
-    }))
-  )
+  // console.log(
+  //   "[DEBUG] Rendering chatMessages:",
+  //   chatMessages.map(m => ({
+  //     id: m.message.id,
+  //     role: m.message.role,
+  //     content: m.message.content
+  //   }))
+  // )
 
   const { handleSendEdit } = useChatHandler()
 

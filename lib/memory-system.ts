@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/client"
 import type { Memory, MemoryCluster, SimilarMemory } from "@/types/memory"
+import { validateMemoryContent, isAIResponse } from "./memory-validation"
 
 // Ensure this only runs on the server
 if (typeof window !== "undefined") {
@@ -17,7 +18,9 @@ try {
   console.warn("OpenAI not available:", error)
 }
 
-const supabase = createClient()
+// NOTE: All functions now require a Supabase client (with session/cookies) as the first parameter.
+// This is required for RLS-protected operations (e.g., memory_clusters, memories).
+// Do NOT use a generic client; always pass a session-aware client from the API route.
 
 // Re-export types for convenience
 export type { Memory, MemoryCluster, SimilarMemory }
@@ -25,9 +28,15 @@ export type { Memory, MemoryCluster, SimilarMemory }
 // Generate embedding for text content
 export const generateEmbedding = async (text: string): Promise<number[]> => {
   try {
+    if (typeof text !== "string" || !text.trim()) {
+      console.error("[Embedding] Invalid input for embedding:", text)
+      throw new Error("Embedding input must be a non-empty string")
+    }
+    // Truncate to 8192 characters (OpenAI limit)
+    const safeText = text.slice(0, 8192)
     const response = await openai.embeddings.create({
       model: "text-embedding-3-small",
-      input: text,
+      input: safeText,
       encoding_format: "float"
     })
     return response.data[0].embedding
@@ -83,6 +92,11 @@ export const extractSemanticTags = async (
 
 // Determine memory type based on content
 export const determineMemoryType = (content: string): string => {
+  if (isAIResponse(content)) {
+    throw new Error(
+      "Content appears to be an AI response, not user information"
+    )
+  }
   const lowerContent = content.toLowerCase()
 
   if (
@@ -147,10 +161,32 @@ export const calculateImportanceScore = (
 
 // Save enhanced memory with semantic analysis and clustering
 export const saveEnhancedMemory = async (
+  supabase: any,
   content: string,
   user_id: string
 ): Promise<Memory> => {
   try {
+    if (!validateMemoryContent(content)) {
+      console.warn("❌ Memory content validation failed - skipping save")
+      throw new Error("Memory content validation failed")
+    }
+
+    console.log(`🧠 Memory save attempt: ${content.substring(0, 50)}...`)
+    console.log(`👤 User: ${user_id}`)
+
+    // Check for duplicates first
+    const { checkForDuplicates } = await import("./memory-deduplication")
+    const isDuplicate = await checkForDuplicates(content, user_id, 0.8)
+
+    if (isDuplicate) {
+      console.log(
+        `❌ Duplicate detected - skipping save: ${content.substring(0, 50)}...`
+      )
+      throw new Error("Duplicate memory detected")
+    }
+
+    console.log(`✅ No duplicates found - proceeding with save`)
+
     // Generate embedding
     const embedding = await generateEmbedding(content)
 
@@ -165,6 +201,7 @@ export const saveEnhancedMemory = async (
 
     // Try to find or create cluster
     const clusterId = await findOrCreateCluster(
+      supabase,
       embedding,
       user_id,
       semanticTags,
@@ -190,68 +227,74 @@ export const saveEnhancedMemory = async (
       .single()
 
     if (error) {
-      console.error("Error saving enhanced memory:", error)
+      console.error("❌ Error saving enhanced memory:", error)
       throw error
     }
 
+    console.log(`✅ Memory saved successfully: ${data.id}`)
+    console.log(
+      `📊 Memory details: type=${memoryType}, importance=${importanceScore}, tags=${semanticTags.join(", ")}`
+    )
+
     return data
   } catch (error) {
-    console.error("Error saving enhanced memory:", error)
+    console.error("❌ Error saving enhanced memory:", error)
     throw error
   }
 }
 
 // Find or create appropriate memory cluster
 export const findOrCreateCluster = async (
+  supabase: any,
   embedding: number[],
   user_id: string,
   semanticTags: string[],
   memoryType: string
 ): Promise<string | null> => {
   try {
-    // First, try to find existing similar clusters
-    const { data: existingClusters } = await supabase.rpc(
-      "find_similar_memories",
+    const { data: existingClusters } = (await supabase.rpc(
+      "find_similar_clusters",
       {
         query_embedding: embedding,
         user_id_param: user_id,
         match_count: 3,
-        similarity_threshold: 0.8
+        similarity_threshold: 0.7 // Lowered for better grouping
       }
-    )
+    )) as { data: any[] }
 
     if (existingClusters && existingClusters.length > 0) {
       // Use the most similar cluster
       return existingClusters[0].id
+    } else {
+      console.log(
+        "[Cluster] No existing cluster found, will attempt to create new cluster."
+      )
     }
 
     // Try to create new cluster
     try {
       const clusterName = `${memoryType.charAt(0).toUpperCase() + memoryType.slice(1)} Cluster`
       const clusterDescription = `Cluster for ${memoryType} memories with tags: ${semanticTags.join(", ")}`
-
+      // Do NOT include id in the insert payload, so Postgres will use uuid_generate_v4()
+      const insertPayload = {
+        user_id,
+        name: clusterName,
+        description: clusterDescription,
+        centroid_embedding: embedding
+      }
       const { data: newCluster, error } = await supabase
         .from("memory_clusters")
-        .insert([
-          {
-            user_id,
-            name: clusterName,
-            description: clusterDescription,
-            centroid_embedding: embedding
-          }
-        ])
+        .insert([insertPayload])
         .select()
         .single()
-
       if (error) {
-        console.error("Error creating cluster:", error)
+        console.error("[Cluster] Error creating cluster:", error)
         // Return null to indicate cluster creation failed
         return null
       }
-
       return newCluster.id
     } catch (clusterError) {
-      console.error("Error in cluster creation:", clusterError)
+      console.error("[Cluster] Exception in cluster creation:", clusterError)
       // Return null to indicate cluster creation failed
       return null
     }
@@ -264,6 +307,7 @@ export const findOrCreateCluster = async (
 
 // Adaptive memory retrieval based on current context
 export const getRelevantMemories = async (
+  supabase: any,
   user_id: string,
   currentContext: string,
   limit: number = 5,
@@ -304,10 +348,6 @@ export const getRelevantMemories = async (
       })
       .slice(0, limit)
 
-    console.log(
-      `🔍 Memory retrieval: ${similarMemories?.length || 0} found, ${filteredMemories.length} filtered`
-    )
-
     return filteredMemories
   } catch (error) {
     console.error("Error retrieving relevant memories:", error)
@@ -316,7 +356,10 @@ export const getRelevantMemories = async (
 }
 
 // Update memory access statistics
-export const updateMemoryAccess = async (memoryId: string): Promise<void> => {
+export const updateMemoryAccess = async (
+  supabase: any,
+  memoryId: string
+): Promise<void> => {
   try {
     const { error } = await supabase.rpc("update_memory_access", {
       memory_id: memoryId
@@ -330,6 +373,7 @@ export const updateMemoryAccess = async (memoryId: string): Promise<void> => {
 
 // Get memory clusters for a user
 export const getMemoryClusters = async (
+  supabase: any,
   user_id: string
 ): Promise<MemoryCluster[]> => {
   try {
@@ -350,6 +394,7 @@ export const getMemoryClusters = async (
 
 // Get memories by cluster
 export const getMemoriesByCluster = async (
+  supabase: any,
   clusterId: string,
   user_id: string
 ): Promise<Memory[]> => {
@@ -371,7 +416,7 @@ export const getMemoriesByCluster = async (
 }
 
 // Decay memory relevance (should be called periodically)
-export const decayMemoryRelevance = async (): Promise<void> => {
+export const decayMemoryRelevance = async (supabase: any): Promise<void> => {
   try {
     const { error } = await supabase.rpc("decay_memory_relevance")
 
@@ -382,11 +427,13 @@ export const decayMemoryRelevance = async (): Promise<void> => {
 }
 
 // Get memory statistics
-export const getMemoryStats = async (user_id: string) => {
+export const getMemoryStats = async (supabase: any, user_id: string) => {
   try {
     const { data: memories } = await supabase
       .from("memories")
-      .select("relevance_score, access_count, memory_type, importance_score")
+      .select(
+        "id, content, relevance_score, access_count, memory_type, importance_score, created_at"
+      )
       .eq("user_id", user_id)
 
     const { data: clusters } = await supabase
@@ -399,26 +446,46 @@ export const getMemoryStats = async (user_id: string) => {
     const totalMemories = memories.length
     const totalClusters = clusters.length
     const avgRelevanceScore =
-      memories.reduce((sum, m) => sum + m.relevance_score, 0) / totalMemories
-    const totalAccessCount = memories.reduce(
-      (sum, m) => sum + m.access_count,
+      memories.reduce((sum: number, m: any) => sum + m.relevance_score, 0) /
+      totalMemories
+    const avgImportanceScore =
+      memories.reduce((sum: number, m: any) => sum + m.importance_score, 0) /
+      totalMemories
+    const totalAccesses = memories.reduce(
+      (acc: number, m: any) => acc + m.access_count,
       0
     )
 
+    // Compute type distribution
     const typeDistribution = memories.reduce(
-      (acc, m) => {
+      (acc: Record<string, number>, m: any) => {
         acc[m.memory_type] = (acc[m.memory_type] || 0) + 1
         return acc
       },
       {} as Record<string, number>
     )
 
+    // Get top 5 most relevant memories
+    const mostRelevantMemories = memories
+      .slice()
+      .sort((a: any, b: any) => b.relevance_score - a.relevance_score)
+      .slice(0, 5)
+      .map((m: any) => ({
+        id: m.id,
+        content: m.content,
+        relevance_score: m.relevance_score,
+        memory_type: m.memory_type,
+        created_at: m.created_at
+      }))
+
     return {
       totalMemories,
       totalClusters,
       avgRelevanceScore,
-      totalAccessCount,
-      typeDistribution
+      avgImportanceScore,
+      totalAccessCount: totalAccesses,
+      typeDistribution,
+      mostRelevantMemories
     }
   } catch (error) {
     console.error("Error getting memory stats:", error)

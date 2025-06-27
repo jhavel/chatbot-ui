@@ -1,5 +1,6 @@
 import { supabase } from "@/lib/supabase/browser-client"
 import { TablesInsert, TablesUpdate } from "@/supabase/types"
+import { validateMemoryContent } from "../lib/memory-validation"
 
 export const getToolById = async (toolId: string) => {
   const { data: tool, error } = await supabase
@@ -189,6 +190,11 @@ export const getMemories = async () => {
 }
 
 export const createMemory = async (content: string, user_id: string) => {
+  if (!validateMemoryContent(content)) {
+    console.warn("❌ Memory content validation failed - skipping save")
+    return
+  }
+
   const { data, error } = await supabase
     .from("memories")
     .insert([{ content, user_id }])

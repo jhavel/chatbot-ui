@@ -3,24 +3,22 @@ import { createClient } from "@/lib/supabase/client"
 
 const supabase = createClient()
 
+// Normalize content for duplicate checking
+const normalizeContent = (content: string): string => {
+  return content
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, " ") // Replace multiple whitespace with single space
+    .replace(/[^\w\s]/g, "") // Remove punctuation for comparison
+}
+
 export const checkForDuplicates = async (
   content: string,
   user_id: string,
-  similarityThreshold: number = 0.8
+  similarityThreshold: number = 0.95
 ): Promise<boolean> => {
-  try {
-    const similarMemories = await getRelevantMemories(
-      user_id,
-      content,
-      3,
-      similarityThreshold
-    )
-
-    return similarMemories.length > 0
-  } catch (error) {
-    console.error("Error checking for duplicates:", error)
-    return false
-  }
+  // Bypass duplicate detection for now
+  return false
 }
 
 export const findSimilarMemories = async (
@@ -30,6 +28,7 @@ export const findSimilarMemories = async (
 ): Promise<Array<{ id: string; content: string; similarity: number }>> => {
   try {
     const similarMemories = await getRelevantMemories(
+      supabase,
       user_id,
       content,
       5,
@@ -223,6 +222,71 @@ export const removeDuplicateMemories = async (
     return removedCount
   } catch (error) {
     console.error("Error removing duplicate memories:", error)
+    return 0
+  }
+}
+
+export const cleanupDuplicateMemories = async (
+  user_id: string
+): Promise<number> => {
+  try {
+    console.log(`🧹 Starting duplicate cleanup for user: ${user_id}`)
+
+    // Get all memories for the user
+    const { data: memories, error } = await supabase
+      .from("memories")
+      .select("id, content, created_at")
+      .eq("user_id", user_id)
+      .order("created_at", { ascending: true })
+
+    if (error || !memories) {
+      console.error("Error fetching memories for cleanup:", error)
+      return 0
+    }
+
+    console.log(`📊 Found ${memories.length} total memories to check`)
+
+    const seen = new Set<string>()
+    const duplicates: string[] = []
+
+    for (const memory of memories) {
+      if (!memory.content) continue
+
+      const normalized = normalizeContent(memory.content)
+      if (normalized && seen.has(normalized)) {
+        duplicates.push(memory.id)
+        console.log(`🔍 Found duplicate: ${memory.content.substring(0, 50)}...`)
+      } else if (normalized) {
+        seen.add(normalized)
+      }
+    }
+
+    console.log(`🗑️ Found ${duplicates.length} duplicates to remove`)
+
+    // Remove duplicates, keeping the oldest (they're already sorted by created_at)
+    let removedCount = 0
+    for (const duplicateId of duplicates) {
+      const { error: deleteError } = await supabase
+        .from("memories")
+        .delete()
+        .eq("id", duplicateId)
+        .eq("user_id", user_id)
+
+      if (deleteError) {
+        console.error(
+          `❌ Error removing duplicate ${duplicateId}:`,
+          deleteError
+        )
+      } else {
+        removedCount++
+        console.log(`✅ Removed duplicate: ${duplicateId}`)
+      }
+    }
+
+    console.log(`🎉 Cleanup completed: ${removedCount} duplicates removed`)
+    return removedCount
+  } catch (error) {
+    console.error("Error cleaning up duplicate memories:", error)
     return 0
   }
 }

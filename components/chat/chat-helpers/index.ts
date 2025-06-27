@@ -23,6 +23,7 @@ import React from "react"
 import { toast } from "sonner"
 import { v4 as uuidv4 } from "uuid"
 import { saveMemory } from "@/db/memories"
+import { validateMemoryContent } from "@/lib/memory-validation"
 
 export type ProcessResponseResult =
   | string
@@ -567,6 +568,16 @@ export const handleCreateMessages = async (
   setChatImages: React.Dispatch<React.SetStateAction<MessageImage[]>>,
   selectedAssistant: Tables<"assistants"> | null
 ) => {
+  console.log("🔍 [DEBUG] handleCreateMessages called!")
+  console.log(
+    "🔍 [DEBUG] messageContent:",
+    messageContent.substring(0, 100) + "..."
+  )
+  console.log(
+    "🔍 [DEBUG] generatedText:",
+    generatedText.substring(0, 100) + "..."
+  )
+
   const finalUserMessage: TablesInsert<"messages"> = {
     chat_id: currentChat.id,
     assistant_id: null,
@@ -686,24 +697,126 @@ export const handleCreateMessages = async (
   }
 
   // Enhanced memory saving with semantic processing
-  if (
-    generatedText.toLowerCase().includes("i'll remember") ||
-    generatedText.toLowerCase().includes("i will remember")
-  ) {
+  // Use AI-powered memory detection
+  const shouldSaveAsMemory = async (
+    userMessage: string,
+    aiResponse: string
+  ): Promise<boolean> => {
+    // Only use client-safe detection here. Do NOT import server-only code.
+    console.log("🔍 [DEBUG] Memory detection called with:")
+    console.log("👤 User message:", userMessage.substring(0, 100) + "...")
+    console.log("🤖 AI response:", aiResponse.substring(0, 100) + "...")
+    // Fallback to keyword-based detection only (client-safe)
+    const personalInfoKeywords = [
+      "name",
+      "work",
+      "job",
+      "company",
+      "business",
+      "startup",
+      "founded",
+      "sold",
+      "acquired",
+      "like",
+      "prefer",
+      "favorite",
+      "enjoy",
+      "love",
+      "hate",
+      "dislike",
+      "family",
+      "wife",
+      "husband",
+      "children",
+      "kids",
+      "parents",
+      "education",
+      "studied",
+      "graduated",
+      "school",
+      "university",
+      "skills",
+      "expertise",
+      "experience",
+      "background",
+      "goals",
+      "dreams",
+      "aspirations",
+      "values",
+      "beliefs",
+      "location",
+      "from",
+      "live",
+      "age",
+      "birthday"
+    ]
+    const lowerResponse = aiResponse.toLowerCase()
+    const lowerUserMessage = userMessage.toLowerCase()
+    // Check if conversation contains personal information keywords
+    const hasPersonalKeywords = personalInfoKeywords.some(
+      keyword =>
+        lowerResponse.includes(keyword) || lowerUserMessage.includes(keyword)
+    )
+    // Check if the conversation contains first-person statements
+    const firstPersonPatterns = [
+      /i (am|am a|work|do|like|love|hate|prefer|enjoy|studied|graduated|started|founded|sold|bought|own|have|went|experienced|learned|discovered|want|hope|plan|believe|feel|think|value|care)/i,
+      /my (name|job|work|company|business|startup|family|wife|husband|children|kids|parents|education|school|university|skills|expertise|experience|goals|dreams|aspirations|values|beliefs|location|age|favorite|preference)/i,
+      /i'm (from|a|an|the|working|studying|trying|planning|hoping)/i
+    ]
+    const hasFirstPersonInfo = firstPersonPatterns.some(pattern =>
+      pattern.test(lowerUserMessage)
+    )
+    // Check if AI is acknowledging personal information
+    const aiAcknowledgmentPatterns = [
+      /that's (amazing|great|interesting|fascinating|impressive)/i,
+      /it's (great|amazing|interesting|fascinating|impressive) that/i,
+      /you (are|have|seem|appear|sound)/i,
+      /your (experience|background|skills|expertise|company|business|startup|family|education)/i,
+      /congratulations on/i,
+      /i understand you/i,
+      /based on your/i,
+      /given your/i
+    ]
+    const aiIsAcknowledging = aiAcknowledgmentPatterns.some(pattern =>
+      pattern.test(lowerResponse)
+    )
+    const fallbackResult =
+      hasPersonalKeywords && (hasFirstPersonInfo || aiIsAcknowledging)
+    console.log("🔍 [DEBUG] Fallback detection result:", {
+      hasPersonalKeywords,
+      hasFirstPersonInfo,
+      aiIsAcknowledging,
+      fallbackResult
+    })
+    return fallbackResult
+  }
+
+  console.log("🔍 [DEBUG] About to call shouldSaveAsMemory...")
+  const shouldSave = await shouldSaveAsMemory(messageContent, generatedText)
+  console.log("🔍 [DEBUG] shouldSave result:", shouldSave)
+
+  if (shouldSave) {
+    console.log(
+      "🧠 Personal information detected in conversation, attempting to save memory..."
+    )
+    console.log("👤 User message:", messageContent.substring(0, 100) + "...")
+
     try {
-      // Use the enhanced memory system instead of simple save
-      const { saveEnhancedMemory } = await import("@/lib/memory-system")
-      await saveEnhancedMemory(generatedText, profile.user_id)
-      console.log("🧠 Enhanced memory saved with semantic processing")
+      await fetch("/api/memory/save", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          content: messageContent,
+          user_id: profile.user_id,
+          source: "user",
+          context: { chatId: currentChat?.id }
+        })
+      })
+      console.log("✅ Unified memory saved with user's personal information")
     } catch (err) {
-      console.error("Failed to save enhanced memory:", err)
-      // Fallback to simple memory save
-      try {
-        const { saveMemory } = await import("@/lib/supabase/memories")
-        await saveMemory(generatedText, profile.user_id)
-      } catch (fallbackErr) {
-        console.error("Failed to save memory (fallback):", fallbackErr)
-      }
+      console.error("❌ Failed to save unified memory:", err)
     }
+  } else {
+    console.log("🔍 No personal information detected in conversation")
   }
 }

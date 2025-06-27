@@ -6,7 +6,10 @@ import {
   pruneLowRelevanceMemories,
   consolidateSimilarMemories
 } from "@/lib/memory-optimization"
-import { removeDuplicateMemories } from "@/lib/memory-deduplication"
+import {
+  removeDuplicateMemories,
+  cleanupDuplicateMemories
+} from "@/lib/memory-deduplication"
 
 export async function POST(request: NextRequest) {
   try {
@@ -56,7 +59,7 @@ export async function POST(request: NextRequest) {
         })
 
       case "remove_duplicates":
-        // Remove duplicate memories
+        // Remove duplicate memories (semantic similarity based)
         const duplicateThreshold = options?.duplicateThreshold || 0.95
         const removedCount = await removeDuplicateMemories(
           profile.user_id,
@@ -67,6 +70,15 @@ export async function POST(request: NextRequest) {
           action: "remove_duplicates",
           removedCount,
           duplicateThreshold
+        })
+
+      case "cleanup_duplicates":
+        // Clean up exact duplicates (content-based)
+        const cleanupCount = await cleanupDuplicateMemories(profile.user_id)
+        return NextResponse.json({
+          success: true,
+          action: "cleanup_duplicates",
+          removedCount: cleanupCount
         })
 
       case "get_metrics":
@@ -82,7 +94,7 @@ export async function POST(request: NextRequest) {
         return NextResponse.json(
           {
             error:
-              "Invalid action. Supported actions: full_optimization, prune_memories, consolidate_memories, remove_duplicates, get_metrics"
+              "Invalid action. Supported actions: full_optimization, prune_memories, consolidate_memories, remove_duplicates, cleanup_duplicates, get_metrics"
           },
           { status: 400 }
         )

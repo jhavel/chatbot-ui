@@ -653,18 +653,45 @@ export type Database = {
           created_at: string | null
           id: string
           user_id: string | null
+          embedding: number[] | null
+          cluster_id: string | null
+          relevance_score: number | null
+          access_count: number | null
+          last_accessed: string | null
+          semantic_tags: string[] | null
+          memory_type: string | null
+          importance_score: number | null
+          updated_at: string | null
         }
         Insert: {
           content?: string | null
           created_at?: string | null
           id?: string
           user_id?: string | null
+          embedding?: number[] | null
+          cluster_id?: string | null
+          relevance_score?: number | null
+          access_count?: number | null
+          last_accessed?: string | null
+          semantic_tags?: string[] | null
+          memory_type?: string | null
+          importance_score?: number | null
+          updated_at?: string | null
         }
         Update: {
           content?: string | null
           created_at?: string | null
           id?: string
           user_id?: string | null
+          embedding?: number[] | null
+          cluster_id?: string | null
+          relevance_score?: number | null
+          access_count?: number | null
+          last_accessed?: string | null
+          semantic_tags?: string[] | null
+          memory_type?: string | null
+          importance_score?: number | null
+          updated_at?: string | null
         }
         Relationships: []
       }

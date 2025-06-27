@@ -7,7 +7,8 @@ import {
   getUserMemoryClusters,
   getMemoriesInCluster,
   getUserMemoryStats,
-  markMemoryAccessed
+  markMemoryAccessed,
+  deleteMemory
 } from "@/lib/memory-client"
 import type { Memory, MemoryCluster, MemoryStats } from "@/types/memory"
 import { Badge } from "@/components/ui/badge"
@@ -22,6 +23,17 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Progress } from "@/components/ui/progress"
 import { Button } from "@/components/ui/button"
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger
+} from "@/components/ui/alert-dialog"
+import {
   Brain,
   Clock,
   TrendingUp,
@@ -31,8 +43,10 @@ import {
   FolderOpen,
   Activity,
   Target,
-  RefreshCw
+  RefreshCw,
+  Trash2
 } from "lucide-react"
+import { toast } from "sonner"
 
 export default function MemoryPage() {
   const [memories, setMemories] = useState<Memory[]>([])
@@ -43,6 +57,7 @@ export default function MemoryPage() {
   const [loading, setLoading] = useState(true)
   const [activeTab, setActiveTab] = useState("overview")
   const [regenerating, setRegenerating] = useState(false)
+  const [deletingMemoryId, setDeletingMemoryId] = useState<string | null>(null)
   const supabase = createClientComponentClient()
 
   useEffect(() => {
@@ -113,6 +128,33 @@ export default function MemoryPage() {
     setMemories(updatedMemories)
   }
 
+  const handleDeleteMemory = async (memoryId: string) => {
+    try {
+      setDeletingMemoryId(memoryId)
+      console.log("🗑️ Deleting memory:", memoryId)
+
+      await deleteMemory(memoryId)
+
+      // Remove the memory from the local state
+      setMemories(prevMemories =>
+        prevMemories.filter(memory => memory.id !== memoryId)
+      )
+
+      // Also remove from cluster memories if it exists there
+      setClusterMemories(prevClusterMemories =>
+        prevClusterMemories.filter(memory => memory.id !== memoryId)
+      )
+
+      toast.success("Memory deleted successfully")
+      console.log("✅ Memory deleted successfully:", memoryId)
+    } catch (error) {
+      console.error("❌ Error deleting memory:", error)
+      toast.error("Failed to delete memory")
+    } finally {
+      setDeletingMemoryId(null)
+    }
+  }
+
   const handleRegenerateEmbeddings = async () => {
     setRegenerating(true)
     try {
@@ -169,11 +211,11 @@ export default function MemoryPage() {
     return "text-red-600"
   }
 
-  const formatScore = (score: number | null) => {
+  const formatScore = (score: number | null | undefined) => {
     return (score || 0).toFixed(2)
   }
 
-  const formatCount = (count: number | null) => {
+  const formatCount = (count: number | null | undefined) => {
     return count || 0
   }
 
@@ -189,7 +231,7 @@ export default function MemoryPage() {
   }
 
   return (
-    <div className="space-y-6 p-6">
+    <div className="mx-auto w-full max-w-[1200px] space-y-6 p-4 sm:p-6">
       <div className="flex items-center justify-between">
         <div className="flex items-center space-x-2">
           <Brain className="size-8 text-blue-600" />
@@ -199,195 +241,201 @@ export default function MemoryPage() {
           onClick={handleRegenerateEmbeddings}
           disabled={regenerating}
           variant="outline"
-          className="flex items-center space-x-2"
+          size="sm"
         >
           <RefreshCw
-            className={`size-4 ${regenerating ? "animate-spin" : ""}`}
+            className={`mr-2 size-4 ${regenerating ? "animate-spin" : ""}`}
           />
-          <span>
-            {regenerating ? "Regenerating..." : "Regenerate Embeddings"}
-          </span>
+          {regenerating ? "Regenerating..." : "Regenerate Embeddings"}
         </Button>
       </div>
-
-      {/* Stats Overview */}
-      {stats ? (
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">
-                Total Memories
-              </CardTitle>
-              <Brain className="text-muted-foreground size-4" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{stats.totalMemories}</div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">
-                Memory Clusters
-              </CardTitle>
-              <FolderOpen className="text-muted-foreground size-4" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{stats.totalClusters}</div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">
-                Avg Relevance
-              </CardTitle>
-              <TrendingUp className="text-muted-foreground size-4" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">
-                {formatScore(stats.avgRelevanceScore)}
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">
-                Total Accesses
-              </CardTitle>
-              <Activity className="text-muted-foreground size-4" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{stats.totalAccessCount}</div>
-            </CardContent>
-          </Card>
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">
-                Total Memories
-              </CardTitle>
-              <Brain className="text-muted-foreground size-4" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">0</div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">
-                Memory Clusters
-              </CardTitle>
-              <FolderOpen className="text-muted-foreground size-4" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">0</div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">
-                Avg Relevance
-              </CardTitle>
-              <TrendingUp className="text-muted-foreground size-4" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">0.00</div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">
-                Total Accesses
-              </CardTitle>
-              <Activity className="text-muted-foreground size-4" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">0</div>
-            </CardContent>
-          </Card>
-        </div>
-      )}
 
       <Tabs
         value={activeTab}
         onValueChange={setActiveTab}
         className="space-y-4"
       >
-        <TabsList className="grid w-full grid-cols-3">
+        <TabsList className="grid w-full grid-cols-4">
           <TabsTrigger value="overview">Overview</TabsTrigger>
+          <TabsTrigger value="memories">Memories</TabsTrigger>
           <TabsTrigger value="clusters">Clusters</TabsTrigger>
           <TabsTrigger value="all">All Memories</TabsTrigger>
         </TabsList>
 
         <TabsContent value="overview" className="space-y-4">
-          {/* Memory Type Distribution */}
-          {stats && (
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
             <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center space-x-2">
-                  <Target className="size-5" />
-                  <span>Memory Distribution</span>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">
+                  Total Memories
                 </CardTitle>
-                <CardDescription>
-                  How your memories are organized by type
-                </CardDescription>
+                <Brain className="text-muted-foreground size-4" />
               </CardHeader>
               <CardContent>
-                <div className="space-y-3">
-                  {Object.entries(stats.typeDistribution).map(
-                    ([type, count]) => (
-                      <div
-                        key={type}
-                        className="flex items-center justify-between"
-                      >
-                        <div className="flex items-center space-x-2">
-                          <Badge className={getMemoryTypeColor(type)}>
-                            {type}
-                          </Badge>
-                          <span className="text-sm text-gray-600">
-                            {count} memories
-                          </span>
-                        </div>
-                        <div className="w-32">
+                <div className="text-2xl font-bold">
+                  {formatCount(stats?.totalMemories)}
+                </div>
+                <p className="text-muted-foreground text-xs">Stored memories</p>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">
+                  Memory Clusters
+                </CardTitle>
+                <FolderOpen className="text-muted-foreground size-4" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">
+                  {formatCount(stats?.totalClusters)}
+                </div>
+                <p className="text-muted-foreground text-xs">Semantic groups</p>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">
+                  Avg Relevance
+                </CardTitle>
+                <TrendingUp className="text-muted-foreground size-4" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">
+                  {formatScore(stats?.avgRelevanceScore)}
+                </div>
+                <p className="text-muted-foreground text-xs">Memory quality</p>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">
+                  Total Access
+                </CardTitle>
+                <Activity className="text-muted-foreground size-4" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">
+                  {formatCount(stats?.totalAccessCount)}
+                </div>
+                <p className="text-muted-foreground text-xs">Memory usage</p>
+              </CardContent>
+            </Card>
+          </div>
+
+          {stats?.typeDistribution &&
+            Object.keys(stats.typeDistribution).length > 0 && (
+              <Card>
+                <CardHeader>
+                  <CardTitle>Memory Type Distribution</CardTitle>
+                  <CardDescription>
+                    Breakdown of your memories by type
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-4">
+                    {Object.entries(stats.typeDistribution).map(
+                      ([type, count]) => (
+                        <div key={type} className="space-y-2">
+                          <div className="flex justify-between text-sm">
+                            <span className="capitalize">{type}</span>
+                            <span className="font-medium">{count}</span>
+                          </div>
                           <Progress
                             value={(count / stats.totalMemories) * 100}
                             className="h-2"
                           />
                         </div>
-                      </div>
-                    )
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-          )}
+                      )
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
 
-          {/* Top Memories by Relevance */}
+          {/* Most Relevant Memories Section */}
+          {stats?.mostRelevantMemories &&
+            stats.mostRelevantMemories.length > 0 && (
+              <Card>
+                <CardHeader>
+                  <CardTitle>Most Relevant Memories</CardTitle>
+                  <CardDescription>
+                    Top 5 memories ranked by relevance
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-3">
+                    {stats.mostRelevantMemories.map(memory => (
+                      <div
+                        key={memory.id}
+                        className="hover:bg-accent rounded-lg border p-3 transition-colors"
+                      >
+                        <div className="flex items-start justify-between">
+                          <div className="flex-1">
+                            <div className="mb-2 flex items-center space-x-2">
+                              <p className="text-sm text-gray-600">
+                                {new Date(
+                                  memory.created_at
+                                ).toLocaleDateString()}
+                              </p>
+                              <Badge
+                                className={getMemoryTypeColor(
+                                  memory.memory_type || "general"
+                                )}
+                              >
+                                {memory.memory_type || "general"}
+                              </Badge>
+                            </div>
+                            <p className="text-sm">{memory.content}</p>
+                          </div>
+                          <div className="ml-4 flex items-center space-x-2">
+                            <div className="space-y-1 text-xs text-gray-500">
+                              <div className="flex items-center space-x-1">
+                                <TrendingUp className="size-3" />
+                                <span
+                                  className={getRelevanceColor(
+                                    memory.relevance_score
+                                  )}
+                                >
+                                  {formatScore(memory.relevance_score)}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+        </TabsContent>
+
+        <TabsContent value="memories" className="space-y-4">
           <Card>
             <CardHeader>
-              <CardTitle className="flex items-center space-x-2">
-                <Star className="size-5" />
-                <span>Most Relevant Memories</span>
-              </CardTitle>
+              <CardTitle>Recent Memories</CardTitle>
               <CardDescription>
-                Your most important and frequently accessed memories
+                Your most recently created memories
               </CardDescription>
             </CardHeader>
             <CardContent>
               {memories.length === 0 ? (
-                <div className="py-6 text-center">
-                  <p className="text-gray-500">No memories to display yet.</p>
+                <div className="py-8 text-center">
+                  <Brain className="mx-auto mb-4 size-12 text-gray-400" />
+                  <h3 className="mb-2 text-lg font-medium text-gray-900">
+                    No memories yet
+                  </h3>
+                  <p className="text-gray-500">
+                    Your memories will appear here once you start having
+                    conversations with the assistant.
+                  </p>
                 </div>
               ) : (
                 <div className="space-y-3">
-                  {memories.slice(0, 5).map(memory => (
+                  {memories.slice(0, 10).map(memory => (
                     <div
                       key={memory.id}
                       className="hover:bg-accent cursor-pointer rounded-lg border p-3 transition-colors"
@@ -597,8 +645,7 @@ export default function MemoryPage() {
                   {memories.map(memory => (
                     <div
                       key={memory.id}
-                      className="hover:bg-accent cursor-pointer rounded-lg border p-3 transition-colors"
-                      onClick={() => handleMemoryClick(memory.id)}
+                      className="hover:bg-accent rounded-lg border p-3 transition-colors"
                     >
                       <div className="flex items-start justify-between">
                         <div className="flex-1">
@@ -630,7 +677,12 @@ export default function MemoryPage() {
                                 </div>
                               )}
                           </div>
-                          <p className="text-sm">{memory.content}</p>
+                          <p
+                            className="cursor-pointer text-sm"
+                            onClick={() => handleMemoryClick(memory.id)}
+                          >
+                            {memory.content}
+                          </p>
                         </div>
                         <div className="ml-4 flex items-center space-x-2">
                           <div className="space-y-1 text-xs text-gray-500">
@@ -655,6 +707,44 @@ export default function MemoryPage() {
                               </span>
                             </div>
                           </div>
+                          <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="size-8 p-0 text-red-500 hover:bg-red-50 hover:text-red-700"
+                                onClick={e => e.stopPropagation()}
+                                disabled={deletingMemoryId === memory.id}
+                              >
+                                <Trash2 className="size-4" />
+                              </Button>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent>
+                              <AlertDialogHeader>
+                                <AlertDialogTitle>
+                                  Delete Memory
+                                </AlertDialogTitle>
+                                <AlertDialogDescription>
+                                  Are you sure you want to delete this memory?
+                                  This action cannot be undone.
+                                  <div className="mt-2 rounded bg-gray-50 p-2 text-sm">
+                                    {memory.content}
+                                  </div>
+                                </AlertDialogDescription>
+                              </AlertDialogHeader>
+                              <AlertDialogFooter>
+                                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                <AlertDialogAction
+                                  onClick={() => handleDeleteMemory(memory.id)}
+                                  className="bg-red-500 hover:bg-red-600"
+                                >
+                                  {deletingMemoryId === memory.id
+                                    ? "Deleting..."
+                                    : "Delete"}
+                                </AlertDialogAction>
+                              </AlertDialogFooter>
+                            </AlertDialogContent>
+                          </AlertDialog>
                         </div>
                       </div>
                     </div>

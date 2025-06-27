@@ -31,7 +31,8 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const clusters = await getMemoryClusters(user_id)
+    // Pass the session-aware supabase client to getMemoryClusters
+    const clusters = await getMemoryClusters(supabase, user_id)
 
     return NextResponse.json(clusters)
   } catch (error) {

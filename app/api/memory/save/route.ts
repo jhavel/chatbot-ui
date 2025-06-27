@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createRouteHandlerClient } from "@supabase/auth-helpers-nextjs"
 import { cookies } from "next/headers"
-import { saveEnhancedMemory } from "@/lib/memory-system"
+import { saveMemoryUnified } from "@/lib/memory-interface"
 
 export async function POST(request: NextRequest) {
+  console.log("[DEBUG] /api/memory/save route hit")
   try {
     const supabase = createRouteHandlerClient({ cookies })
 
@@ -30,7 +31,14 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const memory = await saveEnhancedMemory(content, user_id)
+    // Pass the session-aware supabase client to saveMemoryUnified
+    const memory = await saveMemoryUnified(supabase, {
+      content,
+      user_id,
+      source: "user",
+      context: { api: "/api/memory/save" },
+      validationLevel: "normal"
+    })
 
     console.log("💾 Memory saved successfully:", memory.id)
 

@@ -31,7 +31,8 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const stats = await getMemoryStats(user_id)
+    // Pass the session-aware supabase client to getMemoryStats
+    const stats = await getMemoryStats(supabase, user_id)
 
     return NextResponse.json(stats)
   } catch (error) {

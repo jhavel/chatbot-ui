@@ -475,7 +475,13 @@ export const useChatHandler = () => {
           : finalRes?.message?.content ||
             "Assistant responded but no content was returned."
 
+      console.log(
+        "🔍 [DEBUG] Generated text:",
+        generatedText.substring(0, 100) + "..."
+      )
+
       if (!currentChat) {
+        console.log("🔍 [DEBUG] Creating new chat...")
         currentChat = await handleCreateChat(
           chatSettings!,
           profile!,
@@ -487,7 +493,9 @@ export const useChatHandler = () => {
           setChats,
           setChatFiles
         )
+        console.log("🔍 [DEBUG] New chat created:", currentChat?.id)
       } else {
+        console.log("🔍 [DEBUG] Updating existing chat:", currentChat.id)
         const updatedChat = await updateChat(currentChat.id, {
           updated_at: new Date().toISOString()
         })
@@ -503,26 +511,57 @@ export const useChatHandler = () => {
 
       // Persist the streamed assistant message after streaming ends
       // Use the latest chatMessages from context to ensure the streamed content is saved
-      await handleCreateMessages(
-        [...chatMessages],
-        currentChat,
-        profile!,
-        modelData!,
-        messageContent,
-        generatedText,
-        newMessageImages,
-        isRegeneration,
-        retrievedFileItems,
-        setChatMessages,
-        setChatFileItems,
-        setChatImages,
-        selectedAssistant
+      console.log("🔍 [DEBUG] About to call handleCreateMessages...")
+      console.log("🔍 [DEBUG] currentChat:", currentChat?.id)
+      console.log(
+        "🔍 [DEBUG] messageContent:",
+        messageContent.substring(0, 100) + "..."
       )
+      console.log(
+        "🔍 [DEBUG] generatedText:",
+        generatedText.substring(0, 100) + "..."
+      )
+      console.log("🔍 [DEBUG] modelData:", modelData)
+      console.log("🔍 [DEBUG] profile:", profile?.user_id)
+
+      if (!modelData) {
+        console.error(
+          "❌ [DEBUG] modelData is undefined! Cannot call handleCreateMessages"
+        )
+        return
+      }
+
+      try {
+        await handleCreateMessages(
+          [...chatMessages],
+          currentChat,
+          profile!,
+          modelData,
+          messageContent,
+          generatedText,
+          newMessageImages,
+          isRegeneration,
+          retrievedFileItems,
+          setChatMessages,
+          setChatFileItems,
+          setChatImages,
+          selectedAssistant
+        )
+        console.log("🔍 [DEBUG] handleCreateMessages completed successfully")
+      } catch (error) {
+        console.error("❌ [DEBUG] Error in handleCreateMessages:", error)
+        throw error
+      }
 
       setIsGenerating(false)
       setFirstTokenReceived(false)
     } catch (error) {
-      console.error("Send message failed:", error)
+      console.error("❌ [DEBUG] Send message failed:", error)
+      console.error("❌ [DEBUG] Error details:", {
+        message: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+        name: error instanceof Error ? error.name : "Unknown"
+      })
       setIsGenerating(false)
       setFirstTokenReceived(false)
       setUserInput(startingInput)

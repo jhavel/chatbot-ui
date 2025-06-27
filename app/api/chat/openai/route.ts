@@ -17,14 +17,16 @@ import {
   calculateAdaptiveThreshold,
   getOptimalMemoryLimit
 } from "@/lib/memory-optimization"
+import { createRouteHandlerClient } from "@supabase/auth-helpers-nextjs"
+import { cookies } from "next/headers"
 
 // Configuration for proactive memory extraction
 const memoryExtractionConfig: MemoryExtractionConfig = {
-  enableProactiveExtraction: true,
+  enableProactiveExtraction: true, // ENABLED to save all user messages
   extractionThreshold: 0.7, // Only extract memories with 70%+ confidence
   maxMemoriesPerConversation: 5,
   enableSummarization: true,
-  enableDuplicateDetection: true
+  enableDuplicateDetection: false // Disabled since we bypassed it
 }
 
 // Optimized memory retrieval with better context extraction
@@ -108,6 +110,9 @@ export async function POST(request: Request) {
     messages: any[]
   }
 
+  // Create a server-side Supabase client
+  const supabase = createRouteHandlerClient({ cookies })
+
   let memoryMessages: ChatCompletionCreateParamsBase["messages"] = []
 
   try {
@@ -144,7 +149,8 @@ export async function POST(request: Request) {
           await saveExtractedMemories(
             extractedMemories,
             profile.user_id,
-            memoryExtractionConfig
+            memoryExtractionConfig,
+            supabase
           )
         }
       } catch (error) {
@@ -216,13 +222,25 @@ export async function POST(request: Request) {
         .join("\n")
 
       const systemPrompt = chatSettings.model?.includes("gpt-4o")
-        ? `You have access to the following relevant memories about the user:\n\n${memoryContext}\n\nUse this information to provide more personalized and contextual responses. If the memories are relevant to the current conversation, reference them naturally in your response.`
-        : `IMPORTANT: Use these user memories to personalize your response:\n\n${memoryContext}\n\nALWAYS reference relevant memories when responding. If the user asks about themselves or their preferences, use the memories above to provide personalized answers.`
+        ? `You have access to the following relevant memories about the user:\n\n${memoryContext}\n\nUse this information to provide more personalized and contextual responses. If the memories are relevant to the current conversation, reference them naturally in your response.\n\nIMPORTANT: When you learn new personal information about the user (preferences, experiences, facts about them, etc.), incorporate this information naturally into your responses. The system will automatically save important personal details for future reference.`
+        : `IMPORTANT: Use these user memories to personalize your response:\n\n${memoryContext}\n\nALWAYS reference relevant memories when responding. If the user asks about themselves or their preferences, use the memories above to provide personalized answers.\n\nCRITICAL: When you learn new personal information about the user (preferences, experiences, facts about them, etc.), incorporate this information naturally into your responses. The system will automatically save important personal details for future reference.`
 
       memoryMessages = [
         {
           role: "system",
           content: systemPrompt
+        }
+      ]
+    } else {
+      // No existing memories - encourage memory creation
+      const memoryCreationPrompt = chatSettings.model?.includes("gpt-4o")
+        ? `You are a helpful AI assistant with memory capabilities. When you learn new personal information about the user (preferences, experiences, facts about them, etc.), incorporate this information naturally into your responses. The system will automatically save important personal details for future reference.`
+        : `You are a helpful AI assistant with memory capabilities. When you learn new personal information about the user (preferences, experiences, facts about them, etc.), incorporate this information naturally into your responses. The system will automatically save important personal details for future reference.`
+
+      memoryMessages = [
+        {
+          role: "system",
+          content: memoryCreationPrompt
         }
       ]
     }
@@ -234,8 +252,8 @@ export async function POST(request: Request) {
     )
     console.log("📝 Relevant memories found:", relevantMemories.length)
 
-    // LEGACY: Keep the old extraction for backward compatibility
-    // This can be removed once the new system is fully tested
+    // LEGACY MEMORY EXTRACTION ENABLED FOR TESTING
+    // This provides a fallback method for memory saving
     const importantInfo = extractImportantInfo(messages)
     console.log(
       "💡 Extracted important info (legacy):",
@@ -245,7 +263,7 @@ export async function POST(request: Request) {
 
     for (const info of importantInfo) {
       try {
-        await saveMemory(info, profile.user_id)
+        await saveMemory(info, profile.user_id, supabase)
         console.log("💾 Saved memory (legacy):", info.substring(0, 50) + "...")
       } catch (error) {
         console.error("Error saving memory:", error)
@@ -289,11 +307,7 @@ export async function POST(request: Request) {
     })
 
     // Log headers and status for debugging
-    console.log("[OpenAI fetch] Response status:", response.status)
-    console.log(
-      "[OpenAI fetch] Response headers:",
-      Array.from(response.headers.entries())
-    )
+    console.log("[OpenAI] Response status:", response.status)
 
     // If the response is not ok, stream an error
     if (!response.ok) {
@@ -310,10 +324,6 @@ export async function POST(request: Request) {
       })
       return new StreamingTextResponse(stream, { status: response.status })
     }
-
-    // Debug: Check if response.body exists
-    console.log("[OpenAI] Response body exists:", !!response.body)
-    console.log("[OpenAI] Response body type:", typeof response.body)
 
     // Manually proxy the OpenAI response stream to the client
     if (!response.body) {

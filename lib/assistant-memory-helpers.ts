@@ -1,7 +1,10 @@
 import { getRelevantMemories } from "@/lib/memory-system"
 import { getServerProfile } from "@/lib/server/server-chat-helpers"
+import { saveMemoryUnified } from "./memory-interface"
+import { createClient } from "@/lib/supabase/client"
 
 export const getAssistantMemoryContext = async (
+  supabase: any,
   context: string,
   limit: number = 3,
   similarityThreshold: number = 0.4
@@ -9,6 +12,7 @@ export const getAssistantMemoryContext = async (
   try {
     const profile = await getServerProfile()
     const relevantMemories = await getRelevantMemories(
+      supabase,
       profile.user_id,
       context,
       limit,
@@ -28,11 +32,15 @@ export const getAssistantMemoryContext = async (
   }
 }
 
-export const saveAssistantMemory = async (content: string) => {
+export const saveAssistantMemory = async (supabase: any, content: string) => {
   try {
     const profile = await getServerProfile()
-    const { saveEnhancedMemory } = await import("@/lib/memory-system")
-    await saveEnhancedMemory(content, profile.user_id)
+    await saveMemoryUnified(supabase, {
+      content,
+      user_id: profile.user_id,
+      source: "assistant",
+      context: { function: "saveAssistantMemory" }
+    })
     console.log("🧠 Assistant memory saved:", content.substring(0, 50) + "...")
   } catch (error) {
     console.error("Failed to save assistant memory:", error)
@@ -40,6 +48,7 @@ export const saveAssistantMemory = async (content: string) => {
 }
 
 export const getAssistantMemoryContextWithDebug = async (
+  supabase: any,
   context: string,
   limit: number = 3,
   similarityThreshold: number = 0.4
@@ -52,6 +61,7 @@ export const getAssistantMemoryContextWithDebug = async (
     console.log("  - User ID:", profile.user_id)
 
     const relevantMemories = await getRelevantMemories(
+      supabase,
       profile.user_id,
       context,
       limit,

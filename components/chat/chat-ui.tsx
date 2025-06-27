@@ -146,15 +146,6 @@ export const ChatUI: FC<ChatUIProps> = ({}) => {
           )
       }
     })
-    // Debug log: print fetchedChatMessages and assistant message content
-    const assistantMsg = fetchedChatMessages.find(
-      m => m.message.role === "assistant"
-    )
-    console.log("[fetchMessages] fetchedChatMessages:", fetchedChatMessages)
-    console.log(
-      "[fetchMessages] assistant message content:",
-      assistantMsg?.message.content
-    )
     setChatMessages(fetchedChatMessages)
   }
 

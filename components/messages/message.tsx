@@ -45,11 +45,12 @@ export const Message: FC<MessageProps> = ({
   onCancelEdit,
   onSubmitEdit
 }) => {
-  useEffect(() => {
-    if (message.role === "assistant") {
-      console.log("[Streaming]", message.id, message.content)
-    }
-  }, [message.content])
+  // Remove or comment out the console.log statement for [Streaming] message output. Only keep error logs if any.
+  // useEffect(() => {
+  //   if (message.role === "assistant") {
+  //     console.log("[Streaming]", message.id, message.content)
+  //   }
+  // }, [message.content])
 
   const {
     assistants,

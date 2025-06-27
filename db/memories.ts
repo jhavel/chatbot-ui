@@ -6,6 +6,7 @@ import {
   getMemoryStats,
   updateMemoryAccess
 } from "@/lib/memory-system"
+import { validateMemoryContent } from "../lib/memory-validation"
 
 const supabase = createClient()
 
@@ -34,6 +35,11 @@ export const getMemoriesByUserId = async (user_id: string) => {
 }
 
 export const saveMemory = async (content: string, user_id: string) => {
+  if (!validateMemoryContent(content)) {
+    console.warn("❌ Memory content validation failed - skipping save")
+    return
+  }
+
   try {
     // Import the memory system function directly
     const { saveEnhancedMemory } = await import("@/lib/memory-system")
@@ -56,22 +62,28 @@ export const getContextualMemories = async (
   limit: number = 5,
   similarityThreshold: number = 0.6
 ) => {
-  return await getRelevantMemories(user_id, context, limit, similarityThreshold)
+  return await getRelevantMemories(
+    supabase,
+    user_id,
+    context,
+    limit,
+    similarityThreshold
+  )
 }
 
 export const getUserMemoryClusters = async (user_id: string) => {
-  return await getMemoryClusters(user_id)
+  return await getMemoryClusters(supabase, user_id)
 }
 
 export const getMemoriesInCluster = async (
   clusterId: string,
   user_id: string
 ) => {
-  return await getMemoriesByCluster(clusterId, user_id)
+  return await getMemoriesByCluster(supabase, clusterId, user_id)
 }
 
 export const getUserMemoryStats = async (user_id: string) => {
-  return await getMemoryStats(user_id)
+  return await getMemoryStats(supabase, user_id)
 }
 
 export const markMemoryAccessed = async (memoryId: string) => {

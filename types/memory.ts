@@ -40,4 +40,11 @@ export interface MemoryStats {
   avgRelevanceScore: number
   totalAccessCount: number
   typeDistribution: Record<string, number>
+  mostRelevantMemories: Array<{
+    id: string
+    content: string
+    relevance_score: number
+    memory_type: string
+    created_at: string
+  }>
 }

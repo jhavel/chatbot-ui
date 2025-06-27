@@ -37,3 +37,11 @@ export const markMemoryAccessed = async (memoryId: string) => {
   if (!response.ok) throw new Error("Failed to mark memory as accessed")
   return await response.json()
 }
+
+export const deleteMemory = async (memoryId: string) => {
+  const response = await fetch(`/api/memory/delete/${memoryId}`, {
+    method: "DELETE"
+  })
+  if (!response.ok) throw new Error("Failed to delete memory")
+  return await response.json()
+}
