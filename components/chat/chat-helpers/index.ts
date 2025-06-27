@@ -660,6 +660,16 @@ export const handleCreateMessages = async (
       }
     ]
 
+    // Debug log: print the assistant message being saved
+    const assistantMsg = finalChatMessages.find(
+      m => m.message.role === "assistant"
+    )
+    console.log(
+      "[handleCreateMessages] Persisting assistant message:",
+      assistantMsg?.message.content
+    )
+    console.log("[handleCreateMessages] finalChatMessages:", finalChatMessages)
+
     setChatFileItems(prevFileItems => {
       const newFileItems = retrievedFileItems.filter(
         fileItem => !prevFileItems.some(prevItem => prevItem.id === fileItem.id)
