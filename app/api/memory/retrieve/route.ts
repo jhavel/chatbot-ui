@@ -33,7 +33,12 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const memories = await getRelevantMemories(user_id, context, limit)
+    const memories = await getRelevantMemories(
+      supabase,
+      user_id,
+      context,
+      limit
+    )
 
     return NextResponse.json(memories)
   } catch (error) {

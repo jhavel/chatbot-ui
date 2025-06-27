@@ -27,11 +27,16 @@ export async function GET(req: NextRequest) {
       case "contextual":
         const context = searchParams.get("context") || ""
         const limit = parseInt(searchParams.get("limit") || "5")
-        const memories = await getRelevantMemories(user.id, context, limit)
+        const memories = await getRelevantMemories(
+          supabase,
+          user.id,
+          context,
+          limit
+        )
         return NextResponse.json(memories)
 
       case "clusters":
-        const clusters = await getMemoryClusters(user.id)
+        const clusters = await getMemoryClusters(supabase, user.id)
         return NextResponse.json(clusters)
 
       case "cluster-memories":
@@ -42,11 +47,15 @@ export async function GET(req: NextRequest) {
             { status: 400 }
           )
         }
-        const clusterMemories = await getMemoriesByCluster(clusterId, user.id)
+        const clusterMemories = await getMemoriesByCluster(
+          supabase,
+          clusterId,
+          user.id
+        )
         return NextResponse.json(clusterMemories)
 
       case "stats":
-        const stats = await getMemoryStats(user.id)
+        const stats = await getMemoryStats(supabase, user.id)
         return NextResponse.json(stats)
 
       default:
@@ -82,7 +91,7 @@ export async function POST(req: NextRequest) {
             { status: 400 }
           )
         }
-        await updateMemoryAccess(memoryId)
+        await updateMemoryAccess(supabase, memoryId)
         return NextResponse.json({ success: true })
 
       default:

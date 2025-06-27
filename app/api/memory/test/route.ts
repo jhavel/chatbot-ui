@@ -31,7 +31,7 @@ export async function POST(request: NextRequest) {
       const savedMemories = []
       for (const memory of testMemories) {
         try {
-          const saved = await saveEnhancedMemory(memory, user.id)
+          const saved = await saveEnhancedMemory(supabase, memory, user.id)
           savedMemories.push(saved)
           console.log(`✅ Saved test memory: ${memory}`)
         } catch (error) {
@@ -50,6 +50,7 @@ export async function POST(request: NextRequest) {
       // Test memory retrieval
       const testQuery = "What is my name and what do I do for work?"
       const relevantMemories = await getRelevantMemories(
+        supabase,
         user.id,
         testQuery,
         5,
