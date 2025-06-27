@@ -160,7 +160,7 @@ export async function POST(request: Request) {
 
     // Get memory count for adaptive thresholds
     const { getMemoryStats } = await import("@/lib/memory-system")
-    const memoryStats = await getMemoryStats(profile.user_id)
+    const memoryStats = await getMemoryStats(supabase, profile.user_id)
     const memoryCount = memoryStats?.totalMemories || 0
 
     // Use adaptive similarity threshold
@@ -263,7 +263,7 @@ export async function POST(request: Request) {
 
     for (const info of importantInfo) {
       try {
-        await saveMemory(info, profile.user_id, supabase)
+        await saveMemory(info, profile.user_id)
         console.log("💾 Saved memory (legacy):", info.substring(0, 50) + "...")
       } catch (error) {
         console.error("Error saving memory:", error)

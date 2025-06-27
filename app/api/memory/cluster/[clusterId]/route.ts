@@ -35,7 +35,7 @@ export async function GET(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const memories = await getMemoriesByCluster(clusterId, user_id)
+    const memories = await getMemoriesByCluster(supabase, clusterId, user_id)
 
     return NextResponse.json(memories)
   } catch (error) {

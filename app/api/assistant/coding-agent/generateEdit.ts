@@ -1,6 +1,8 @@
 import fs from "fs"
 import { OpenAI } from "openai"
 import path from "path"
+import { cookies } from "next/headers"
+import { createClient } from "@/lib/supabase/server"
 import {
   getAssistantMemoryContextWithDebug,
   saveAssistantMemory
@@ -10,11 +12,13 @@ const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
 
 export async function generateEdit(filePath: string, instruction: string) {
   try {
+    const supabase = createClient(cookies())
     const absolutePath = path.resolve(filePath)
     const originalCode = fs.readFileSync(absolutePath, "utf-8")
 
     // Get relevant memories for coding context
     const memoryContext = await getAssistantMemoryContextWithDebug(
+      supabase,
       `${instruction} ${originalCode}`,
       3,
       0.4
@@ -57,6 +61,7 @@ ${originalCode}`
 
     // Save this coding interaction as a memory for future reference
     await saveAssistantMemory(
+      supabase,
       `User requested code edit: ${instruction} for file ${filePath}. The edit was successfully applied.`
     )
 

@@ -152,4 +152,172 @@
 
 ---
 
+**End of Instructions**
+
+# Customizing Branding: Name, Favicon, Assistant Avatar, and App Icon
+
+## 1. **Frontend Name (App Name/Title/Brand)**
+
+### Where It Is Set:
+- **App Metadata:**  
+  - `app/[locale]/layout.tsx`  
+    - Constants: `APP_NAME`, `APP_DEFAULT_TITLE`, `APP_TITLE_TEMPLATE`, `APP_DESCRIPTION`
+    - Used in the `metadata` export for Next.js, which sets the page title, app name, and meta tags.
+- **Manifest:**  
+  - `public/manifest.json`  
+    - `"short_name"` and `"name"` fields.
+- **UI Display:**  
+  - `components/ui/brand.tsx`  
+    - The `Brand` component displays the logo and the name ("Chatbot UI" hardcoded).
+    - Used on the login page and likely in other header areas.
+
+### How to Change:
+- Update the constants in `app/[locale]/layout.tsx`.
+- Update the `"short_name"` and `"name"` in `public/manifest.json`.
+- Update the hardcoded name in `components/ui/brand.tsx` (and any other places you want the new name to appear).
+
+### Potential Issues:
+- If you change only the manifest or only the layout, the name may be inconsistent across the PWA install, browser tab, and UI.
+- The name is hardcoded in some places, so a global search/replace is safest.
+
+---
+
+## 2. **Favicon**
+
+### Where It Is Set:
+- **File:**  
+  - `public/favicon.ico` (standard location for Next.js/React apps).
+- **Reference:**  
+  - No explicit `<link rel="icon">` found in code; Next.js automatically serves `public/favicon.ico` as the default favicon.
+
+### How to Change:
+- Replace `public/favicon.ico` with your new favicon file (must be named `favicon.ico`).
+
+### Potential Issues:
+- If you want to use a different file name or format, you must add a `<link rel="icon" href="/yourfile.png">` in a custom `_document.js` or in the `<head>` of your layout (not currently present).
+- Browsers may cache favicons aggressively; clear cache or do a hard refresh to see changes.
+
+---
+
+## 3. **App Icon (PWA/Installable App Icon)**
+
+### Where It Is Set:
+- **Manifest:**  
+  - `public/manifest.json`  
+    - `"icons"` array references `/icon-192x192.png`, `/icon-256x256.png`, `/icon-512x512.png`.
+- **Files:**  
+  - `public/icon-192x192.png`
+  - `public/icon-256x256.png`
+  - `public/icon-512x512.png`
+
+### How to Change:
+- Replace the PNG files in `public/` with your new icons (keep the same file names and sizes).
+- Optionally update the `"icons"` array in `manifest.json` if you want to use different sizes or add more.
+
+### Potential Issues:
+- If you change file names, update the manifest accordingly.
+- PWA/app icon changes may require uninstalling/reinstalling the app or clearing browser cache to take effect.
+
+---
+
+## 4. **Assistant Avatar**
+
+### Where It Is Set:
+- **Assistant Images:**  
+  - Managed via Supabase storage and referenced by `assistant.image_path`.
+  - Code for uploading and retrieving:  
+    - `db/storage/assistant-images.ts`
+    - `components/sidebar/items/assistants/assistant-item.tsx` (and similar for creation)
+    - `components/chat/assistant-picker.tsx`, `components/chat/chat-input.tsx`, `components/messages/message.tsx`, etc.
+- **Default Icon:**  
+  - If no image is set, falls back to an icon (e.g., `IconRobotFace`).
+
+### How to Change:
+- When creating or editing an assistant (sidebar or settings), use the UI to upload a new image.
+- The image is stored in Supabase and referenced by path.
+- To change the default fallback icon, update the relevant components (e.g., replace `IconRobotFace` with your own SVG or image).
+
+### Potential Issues:
+- Uploaded images are user/workspace/assistant-specific, not global.
+- If you want a global default avatar, you must change the fallback icon in all relevant components.
+
+---
+
+## 5. **App Logo in UI**
+
+### Where It Is Set:
+- **SVG Logo:**  
+  - `components/icons/chatbotui-svg.tsx` (used in `Brand` component).
+- **Brand Component:**  
+  - `components/ui/brand.tsx` (renders the SVG and app name).
+
+### How to Change:
+- Replace the SVG code in `components/icons/chatbotui-svg.tsx` with your own logo.
+- Update the `Brand` component if you want to change layout, link, or other branding.
+
+---
+
+## 6. **Other Branding Considerations**
+
+- **Provider Logos:**  
+  - `public/providers/` contains PNGs for model/provider branding (e.g., Groq, Mistral). Update as needed.
+- **Theme/Colors:**  
+  - `app/[locale]/style/page.tsx` and related files control theme and style customization.
+
+---
+
+## 7. **Summary Table**
+
+| What                | Where to Change                                      | How to Change                        |
+|---------------------|------------------------------------------------------|--------------------------------------|
+| App Name            | `layout.tsx`, `manifest.json`, `brand.tsx`           | Edit constants, manifest, UI text    |
+| Favicon             | `public/favicon.ico`                                 | Replace file                         |
+| App Icon (PWA)      | `public/icon-*.png`, `manifest.json`                 | Replace files, update manifest       |
+| Assistant Avatar    | UI (sidebar/settings), fallback in components        | Upload via UI, edit fallback icon    |
+| App Logo in UI      | `chatbotui-svg.tsx`, `brand.tsx`                     | Replace SVG, update component        |
+
+---
+
+## 8. **Why Might Branding Not Update?**
+
+- **Browser Cache:** Browsers cache favicons and manifest icons. Hard refresh or clear cache if changes don't appear.
+- **PWA Cache:** If installed as a PWA, you may need to uninstall/reinstall.
+- **Hardcoded Names:** Some names/logos are hardcoded in components; search and replace all instances.
+- **No `<link rel="icon">`:** If you want a non-default favicon, you must add a `<link rel="icon">` in the HTML head.
+
+---
+
+## 9. **Is Anything Impossible?**
+
+- **No.** All requested changes are possible with the current codebase and tools.  
+- **Note:** If you want to make the assistant avatar global (not per-assistant), you would need to refactor the logic to use a global default.
+
+---
+
+## 10. **Step-by-Step Checklist**
+
+1. **Change App Name:**
+   - Edit `APP_NAME`, `APP_DEFAULT_TITLE`, etc. in `app/[locale]/layout.tsx`
+   - Edit `"name"` and `"short_name"` in `public/manifest.json`
+   - Edit `components/ui/brand.tsx` and any other UI text
+
+2. **Change Favicon:**
+   - Replace `public/favicon.ico` with your new icon
+
+3. **Change App Icon:**
+   - Replace `public/icon-192x192.png`, `icon-256x256.png`, `icon-512x512.png`
+   - Update `public/manifest.json` if needed
+
+4. **Change Assistant Avatar:**
+   - Use the UI to upload a new image for each assistant
+   - (Optional) Change fallback icon in relevant components
+
+5. **Change App Logo in UI:**
+   - Replace SVG in `components/icons/chatbotui-svg.tsx`
+   - Update `components/ui/brand.tsx` if needed
+
+6. **Clear Browser/PWA Cache** after making changes
+
+---
+
 **End of Instructions** 

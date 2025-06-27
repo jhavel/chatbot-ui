@@ -40,7 +40,7 @@ export async function POST(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    await updateMemoryAccess(memoryId)
+    await updateMemoryAccess(supabase, memoryId)
 
     return NextResponse.json({ success: true })
   } catch (error) {

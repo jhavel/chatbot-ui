@@ -1,4 +1,6 @@
 import { NextResponse } from "next/server"
+import { cookies } from "next/headers"
+import { createClient } from "@/lib/supabase/server"
 import { exec } from "child_process"
 import { promisify } from "util"
 import {
@@ -10,8 +12,11 @@ const execAsync = promisify(exec)
 
 export async function GET() {
   try {
+    const supabase = createClient(cookies())
+
     // Get memory context for git operations
     const memoryContext = await getAssistantMemoryContext(
+      supabase,
       "git status check",
       2,
       0.3
@@ -21,6 +26,7 @@ export async function GET() {
 
     // Save git status check as memory
     await saveAssistantMemory(
+      supabase,
       `User checked git status. Status: ${stdout.trim() || "clean working directory"}`
     )
 

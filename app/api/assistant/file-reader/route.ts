@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
+import { cookies } from "next/headers"
+import { createClient } from "@/lib/supabase/server"
 import fs from "fs/promises"
 import path from "path"
 import {
@@ -8,6 +10,7 @@ import {
 
 export async function POST(req: NextRequest) {
   try {
+    const supabase = createClient(cookies())
     const { filePath } = await req.json()
 
     // Resolve securely
@@ -15,6 +18,7 @@ export async function POST(req: NextRequest) {
 
     // Get memory context for file reading
     const memoryContext = await getAssistantMemoryContext(
+      supabase,
       `reading file ${filePath}`,
       2,
       0.3
@@ -24,6 +28,7 @@ export async function POST(req: NextRequest) {
 
     // Save file reading interaction as memory
     await saveAssistantMemory(
+      supabase,
       `User read file: ${filePath}. File size: ${content.length} characters.`
     )
 
