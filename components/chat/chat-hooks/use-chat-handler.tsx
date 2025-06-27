@@ -513,7 +513,7 @@ export const useChatHandler = () => {
 
           // ✅ Save tool-generated message
           await handleCreateMessages(
-            chatMessages,
+            [...chatMessages],
             currentChat,
             profile!,
             modelData!,
@@ -583,8 +583,9 @@ export const useChatHandler = () => {
       }
 
       // Persist the streamed assistant message after streaming ends
+      // Use the latest chatMessages from context to ensure the streamed content is saved
       await handleCreateMessages(
-        chatMessages,
+        [...chatMessages],
         currentChat,
         profile!,
         modelData!,
