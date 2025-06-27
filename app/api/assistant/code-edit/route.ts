@@ -1,12 +1,34 @@
 import { NextResponse } from "next/server"
 import { handleCodeEditRequest } from "@/app/api/assistant/coding-agent/chat-helpers"
+import {
+  getAssistantMemoryContext,
+  saveAssistantMemory
+} from "@/lib/assistant-memory-helpers"
 
 export async function POST(req: Request) {
   const { instruction, fileName } = await req.json()
 
+  // Get memory context for code editing
+  const memoryContext = await getAssistantMemoryContext(
+    `code edit: ${instruction} for file ${fileName}`,
+    3,
+    0.4
+  )
+
   const { diff } = await handleCodeEditRequest(instruction, fileName)
 
+  // Save code editing interaction as memory
+  await saveAssistantMemory(
+    `User requested code edit: ${instruction} for file ${fileName}. Diff generated successfully.`
+  )
+
+  // Include memory context in response if available
+  let content = `Here is the proposed diff:\n\n${diff}`
+  if (memoryContext) {
+    content = `User Context:\n${memoryContext}\n\n${content}`
+  }
+
   return NextResponse.json({
-    content: `Here is the proposed diff:\n\n${diff}`
+    content
   })
 }

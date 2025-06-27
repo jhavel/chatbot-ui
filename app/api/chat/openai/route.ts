@@ -212,8 +212,8 @@ export async function POST(request: Request) {
 
     // Get contextually relevant memories with lower threshold for GPT-4 Turbo
     const similarityThreshold = chatSettings.model?.includes("gpt-4o")
-      ? 0.3
-      : 0.1
+      ? 0.25 // Lower for better recall
+      : 0.15 // Lower for better recall
     console.log("🎯 Using similarity threshold:", similarityThreshold)
     const relevantMemories = await getContextualMemories(
       profile.user_id,
@@ -229,6 +229,21 @@ export async function POST(request: Request) {
       console.log("   - Similarity threshold is still too high")
       console.log("   - Context extraction isn't working well")
       console.log("   - Embeddings aren't being generated properly")
+      console.log("   - RLS policies might be blocking access")
+
+      // Try with even lower threshold for debugging
+      console.log("🔍 Trying with very low threshold (0.1) for debugging...")
+      const debugMemories = await getContextualMemories(
+        profile.user_id,
+        currentContext,
+        5,
+        0.1
+      )
+      console.log("🔍 Debug memories found:", debugMemories.length)
+      if (debugMemories.length > 0) {
+        console.log("✅ Memories exist but threshold was too high!")
+        relevantMemories.push(...debugMemories)
+      }
     }
     relevantMemories.forEach((memory, index) => {
       console.log(

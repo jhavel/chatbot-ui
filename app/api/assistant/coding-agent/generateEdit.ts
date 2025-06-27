@@ -1,6 +1,10 @@
 import fs from "fs"
 import { OpenAI } from "openai"
 import path from "path"
+import {
+  getAssistantMemoryContextWithDebug,
+  saveAssistantMemory
+} from "@/lib/assistant-memory-helpers"
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
 
@@ -9,13 +13,29 @@ export async function generateEdit(filePath: string, instruction: string) {
     const absolutePath = path.resolve(filePath)
     const originalCode = fs.readFileSync(absolutePath, "utf-8")
 
+    // Get relevant memories for coding context
+    const memoryContext = await getAssistantMemoryContextWithDebug(
+      `${instruction} ${originalCode}`,
+      3,
+      0.4
+    )
+
+    // Build enhanced system prompt with memory context
+    let systemPrompt =
+      "You are a senior software engineer with access to the user's preferences and coding style."
+
+    if (memoryContext) {
+      systemPrompt += memoryContext
+    }
+
+    systemPrompt += "\n\nOnly output the full modified source code."
+
     const response = await openai.chat.completions.create({
       model: "gpt-4",
       messages: [
         {
           role: "system",
-          content:
-            "You are a senior software engineer. Only output the full modified source code."
+          content: systemPrompt
         },
         {
           role: "user",
@@ -34,6 +54,11 @@ ${originalCode}`
 
     const cleanCode = updatedCode.replace(/^```[\s\S]*?\n|\n```$/g, "").trim()
     fs.writeFileSync(absolutePath, cleanCode, "utf-8")
+
+    // Save this coding interaction as a memory for future reference
+    await saveAssistantMemory(
+      `User requested code edit: ${instruction} for file ${filePath}. The edit was successfully applied.`
+    )
 
     console.log(`✅ Committed changes to ${absolutePath}`)
     console.log("File after edit:\n", updatedCode)
