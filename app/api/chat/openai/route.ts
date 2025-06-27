@@ -8,8 +8,355 @@ import { ChatCompletionCreateParamsBase } from "openai/resources/chat/completion
 import { getContextualMemories, saveMemory } from "@/db/memories"
 import { fileTools } from "@/lib/tools/fileTools"
 import { OpenAIStream, StreamingTextResponse } from "ai"
+import {
+  extractMemoriesWithConfidence,
+  saveExtractedMemories,
+  MemoryExtractionConfig
+} from "@/lib/memory-extraction"
+import {
+  calculateAdaptiveThreshold,
+  getOptimalMemoryLimit
+} from "@/lib/memory-optimization"
 
-// Helper function to extract important information for memory
+// Configuration for proactive memory extraction
+const memoryExtractionConfig: MemoryExtractionConfig = {
+  enableProactiveExtraction: true,
+  extractionThreshold: 0.7, // Only extract memories with 70%+ confidence
+  maxMemoriesPerConversation: 5,
+  enableSummarization: true,
+  enableDuplicateDetection: true
+}
+
+// Optimized memory retrieval with better context extraction
+const getOptimizedContext = (messages: any[]): string => {
+  // Extract key terms and topics from recent messages
+  const recentMessages = messages.slice(-5) // Last 5 messages
+  const contextWords: string[] = []
+
+  for (const message of recentMessages) {
+    const content = message.content.toLowerCase()
+
+    // Extract key terms (simple keyword extraction)
+    const words = content.split(/\s+/)
+    const keyTerms = words.filter(
+      (word: string) =>
+        word.length > 2 &&
+        ![
+          "the",
+          "and",
+          "but",
+          "for",
+          "are",
+          "with",
+          "this",
+          "that",
+          "have",
+          "they",
+          "will",
+          "from",
+          "said",
+          "each",
+          "which",
+          "their",
+          "time",
+          "would",
+          "there",
+          "could",
+          "other",
+          "than",
+          "first",
+          "been",
+          "call",
+          "who",
+          "its",
+          "now",
+          "find",
+          "down",
+          "day",
+          "did",
+          "get",
+          "come",
+          "made",
+          "may",
+          "part",
+          "you",
+          "your",
+          "what",
+          "how",
+          "why",
+          "when",
+          "where"
+        ].includes(word)
+    )
+
+    contextWords.push(...keyTerms.slice(0, 15)) // Top 15 words per message
+  }
+
+  // Also include the full content of the last user message for better context
+  const lastUserMessage = messages.filter(m => m.role === "user").pop()
+  if (lastUserMessage) {
+    contextWords.push(lastUserMessage.content.toLowerCase())
+  }
+
+  return contextWords.join(" ")
+}
+
+export async function POST(request: Request) {
+  const json = await request.json()
+  const { chatSettings, messages } = json as {
+    chatSettings: ChatSettings
+    messages: any[]
+  }
+
+  let memoryMessages: ChatCompletionCreateParamsBase["messages"] = []
+
+  try {
+    const profile = await getServerProfile()
+
+    console.log("👤 User profile:", profile.user_id)
+
+    // Use optimized context extraction
+    const currentContext = getOptimizedContext(messages)
+
+    console.log(
+      "📝 Optimized context:",
+      currentContext.substring(0, 100) + "..."
+    )
+
+    // PROACTIVE MEMORY EXTRACTION - NEW FEATURE
+    if (memoryExtractionConfig.enableProactiveExtraction) {
+      try {
+        console.log("🧠 Starting proactive memory extraction...")
+
+        // Extract memories from current conversation
+        const extractedMemories = await extractMemoriesWithConfidence(
+          messages,
+          profile.user_id,
+          memoryExtractionConfig
+        )
+
+        if (extractedMemories.length > 0) {
+          console.log(
+            `💡 Extracted ${extractedMemories.length} potential memories`
+          )
+
+          // Save extracted memories with enhanced processing
+          await saveExtractedMemories(
+            extractedMemories,
+            profile.user_id,
+            memoryExtractionConfig
+          )
+        }
+      } catch (error) {
+        console.error("❌ Error in proactive memory extraction:", error)
+      }
+    }
+
+    // Get memory count for adaptive thresholds
+    const { getMemoryStats } = await import("@/lib/memory-system")
+    const memoryStats = await getMemoryStats(profile.user_id)
+    const memoryCount = memoryStats?.totalMemories || 0
+
+    // Use adaptive similarity threshold
+    const similarityThreshold = calculateAdaptiveThreshold(
+      profile.user_id,
+      memoryCount,
+      currentContext
+    )
+
+    // Use optimal memory limit
+    const memoryLimit = getOptimalMemoryLimit(memoryCount, currentContext)
+
+    console.log(
+      `🎯 Using adaptive threshold: ${similarityThreshold}, limit: ${memoryLimit}`
+    )
+
+    const relevantMemories = await getContextualMemories(
+      profile.user_id,
+      currentContext,
+      memoryLimit,
+      similarityThreshold
+    )
+
+    console.log("🔍 Found relevant memories:", relevantMemories.length)
+    if (relevantMemories.length === 0) {
+      console.log("⚠️ No memories found - this might indicate:")
+      console.log("   - No memories exist for this user")
+      console.log("   - Similarity threshold is still too high")
+      console.log("   - Context extraction isn't working well")
+      console.log("   - Embeddings aren't being generated properly")
+      console.log("   - RLS policies might be blocking access")
+
+      // Try with even lower threshold for debugging
+      console.log("🔍 Trying with very low threshold (0.1) for debugging...")
+      const debugMemories = await getContextualMemories(
+        profile.user_id,
+        currentContext,
+        5,
+        0.1
+      )
+      console.log("🔍 Debug memories found:", debugMemories.length)
+      if (debugMemories.length > 0) {
+        console.log("✅ Memories exist but threshold was too high!")
+        relevantMemories.push(...debugMemories)
+      }
+    }
+    relevantMemories.forEach((memory, index) => {
+      console.log(
+        `  Memory ${index + 1}:`,
+        memory.content.substring(0, 50) + "...",
+        `(similarity: ${memory.similarity})`
+      )
+    })
+
+    // Create more explicit memory context for GPT-4 Turbo
+    if (relevantMemories.length > 0) {
+      const memoryContext = relevantMemories
+        .map(memory => `• ${memory.content}`)
+        .join("\n")
+
+      const systemPrompt = chatSettings.model?.includes("gpt-4o")
+        ? `You have access to the following relevant memories about the user:\n\n${memoryContext}\n\nUse this information to provide more personalized and contextual responses. If the memories are relevant to the current conversation, reference them naturally in your response.`
+        : `IMPORTANT: Use these user memories to personalize your response:\n\n${memoryContext}\n\nALWAYS reference relevant memories when responding. If the user asks about themselves or their preferences, use the memories above to provide personalized answers.`
+
+      memoryMessages = [
+        {
+          role: "system",
+          content: systemPrompt
+        }
+      ]
+    }
+
+    console.log(
+      "🧠 Injected contextual memory messages:",
+      memoryMessages.length,
+      "memories"
+    )
+    console.log("📝 Relevant memories found:", relevantMemories.length)
+
+    // LEGACY: Keep the old extraction for backward compatibility
+    // This can be removed once the new system is fully tested
+    const importantInfo = extractImportantInfo(messages)
+    console.log(
+      "💡 Extracted important info (legacy):",
+      importantInfo.length,
+      "items"
+    )
+
+    for (const info of importantInfo) {
+      try {
+        await saveMemory(info, profile.user_id)
+        console.log("💾 Saved memory (legacy):", info.substring(0, 50) + "...")
+      } catch (error) {
+        console.error("Error saving memory:", error)
+      }
+    }
+  } catch (e) {
+    console.error("Error loading contextual memories:", e)
+  }
+
+  const finalMessages = [...memoryMessages, ...messages]
+
+  try {
+    const profile = await getServerProfile()
+    checkApiKey(profile.openai_api_key, "OpenAI")
+
+    // Use fetch to call OpenAI API directly for streaming
+    const response = await fetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${profile.openai_api_key}`,
+        "Content-Type": "application/json",
+        ...(profile.openai_organization_id
+          ? { "OpenAI-Organization": profile.openai_organization_id }
+          : {})
+      },
+      body: JSON.stringify({
+        model: chatSettings.model,
+        messages: finalMessages,
+        temperature: chatSettings.temperature,
+        max_tokens:
+          chatSettings.model === "gpt-4-vision-preview" ||
+          chatSettings.model === "gpt-4o"
+            ? 4096
+            : null,
+        tools: fileTools.map(({ name, description, parameters }) => ({
+          type: "function",
+          function: { name, description, parameters }
+        })),
+        stream: true
+      })
+    })
+
+    // Log headers and status for debugging
+    console.log("[OpenAI fetch] Response status:", response.status)
+    console.log(
+      "[OpenAI fetch] Response headers:",
+      Array.from(response.headers.entries())
+    )
+
+    // If the response is not ok, stream an error
+    if (!response.ok) {
+      const errorText = await response.text()
+      console.error("OpenAI API error:", errorText)
+      const encoder = new TextEncoder()
+      const stream = new ReadableStream({
+        start(controller) {
+          const errorData = `data: ${JSON.stringify({ choices: [{ delta: { content: errorText } }] })}\n`
+          controller.enqueue(encoder.encode(errorData))
+          controller.enqueue(encoder.encode("data: [DONE]\n"))
+          controller.close()
+        }
+      })
+      return new StreamingTextResponse(stream, { status: response.status })
+    }
+
+    // Debug: Check if response.body exists
+    console.log("[OpenAI] Response body exists:", !!response.body)
+    console.log("[OpenAI] Response body type:", typeof response.body)
+
+    // Manually proxy the OpenAI response stream to the client
+    if (!response.body) {
+      return new Response("No response body from OpenAI", { status: 500 })
+    }
+    return new Response(response.body, {
+      status: response.status,
+      headers: {
+        "Content-Type": "text/event-stream; charset=utf-8",
+        "Cache-Control": "no-cache",
+        Connection: "keep-alive",
+        "X-Accel-Buffering": "no"
+      }
+    })
+  } catch (error: any) {
+    let errorMessage = error.message || "An unexpected error occurred"
+    const errorCode = error.status || 500
+
+    if (errorMessage.toLowerCase().includes("api key not found")) {
+      errorMessage =
+        "OpenAI API Key not found. Please set it in your profile settings."
+    } else if (errorMessage.toLowerCase().includes("incorrect api key")) {
+      errorMessage =
+        "OpenAI API Key is incorrect. Please fix it in your profile settings."
+    }
+
+    console.error("❌ OpenAI API error:", errorMessage)
+
+    const encoder = new TextEncoder()
+    const stream = new ReadableStream({
+      start(controller) {
+        const errorData = `data: ${JSON.stringify({ choices: [{ delta: { content: errorMessage } }] })}\n`
+        controller.enqueue(encoder.encode(errorData))
+        controller.enqueue(encoder.encode("data: [DONE]\n"))
+        controller.close()
+      }
+    })
+
+    return new StreamingTextResponse(stream, { status: errorCode })
+  }
+}
+
+// LEGACY: Keep the old extraction function for backward compatibility
 const extractImportantInfo = (messages: any[]): string[] => {
   const importantInfo: string[] = []
 
@@ -112,285 +459,6 @@ const extractImportantInfo = (messages: any[]): string[] => {
   }
 
   return importantInfo
-}
-
-// Optimized memory retrieval with better context extraction
-const getOptimizedContext = (messages: any[]): string => {
-  // Extract key terms and topics from recent messages
-  const recentMessages = messages.slice(-5) // Last 5 messages
-  const contextWords: string[] = []
-
-  for (const message of recentMessages) {
-    const content = message.content.toLowerCase()
-
-    // Extract key terms (simple keyword extraction)
-    const words = content.split(/\s+/)
-    const keyTerms = words.filter(
-      (word: string) =>
-        word.length > 2 &&
-        ![
-          "the",
-          "and",
-          "but",
-          "for",
-          "are",
-          "with",
-          "this",
-          "that",
-          "have",
-          "they",
-          "will",
-          "from",
-          "said",
-          "each",
-          "which",
-          "their",
-          "time",
-          "would",
-          "there",
-          "could",
-          "other",
-          "than",
-          "first",
-          "been",
-          "call",
-          "who",
-          "its",
-          "now",
-          "find",
-          "down",
-          "day",
-          "did",
-          "get",
-          "come",
-          "made",
-          "may",
-          "part",
-          "you",
-          "your",
-          "what",
-          "how",
-          "why",
-          "when",
-          "where"
-        ].includes(word)
-    )
-
-    contextWords.push(...keyTerms.slice(0, 15)) // Top 15 words per message
-  }
-
-  // Also include the full content of the last user message for better context
-  const lastUserMessage = messages.filter(m => m.role === "user").pop()
-  if (lastUserMessage) {
-    contextWords.push(lastUserMessage.content.toLowerCase())
-  }
-
-  return contextWords.join(" ")
-}
-
-export async function POST(request: Request) {
-  const json = await request.json()
-  const { chatSettings, messages } = json as {
-    chatSettings: ChatSettings
-    messages: any[]
-  }
-
-  let memoryMessages: ChatCompletionCreateParamsBase["messages"] = []
-
-  try {
-    const profile = await getServerProfile()
-
-    console.log("👤 User profile:", profile.user_id)
-
-    // Use optimized context extraction
-    const currentContext = getOptimizedContext(messages)
-
-    console.log(
-      "📝 Optimized context:",
-      currentContext.substring(0, 100) + "..."
-    )
-
-    // Get contextually relevant memories with lower threshold for GPT-4 Turbo
-    const similarityThreshold = chatSettings.model?.includes("gpt-4o")
-      ? 0.25 // Lower for better recall
-      : 0.15 // Lower for better recall
-    console.log("🎯 Using similarity threshold:", similarityThreshold)
-    const relevantMemories = await getContextualMemories(
-      profile.user_id,
-      currentContext,
-      5,
-      similarityThreshold
-    )
-
-    console.log("🔍 Found relevant memories:", relevantMemories.length)
-    if (relevantMemories.length === 0) {
-      console.log("⚠️ No memories found - this might indicate:")
-      console.log("   - No memories exist for this user")
-      console.log("   - Similarity threshold is still too high")
-      console.log("   - Context extraction isn't working well")
-      console.log("   - Embeddings aren't being generated properly")
-      console.log("   - RLS policies might be blocking access")
-
-      // Try with even lower threshold for debugging
-      console.log("🔍 Trying with very low threshold (0.1) for debugging...")
-      const debugMemories = await getContextualMemories(
-        profile.user_id,
-        currentContext,
-        5,
-        0.1
-      )
-      console.log("🔍 Debug memories found:", debugMemories.length)
-      if (debugMemories.length > 0) {
-        console.log("✅ Memories exist but threshold was too high!")
-        relevantMemories.push(...debugMemories)
-      }
-    }
-    relevantMemories.forEach((memory, index) => {
-      console.log(
-        `  Memory ${index + 1}:`,
-        memory.content.substring(0, 50) + "...",
-        `(similarity: ${memory.similarity})`
-      )
-    })
-
-    // Create more explicit memory context for GPT-4 Turbo
-    if (relevantMemories.length > 0) {
-      const memoryContext = relevantMemories
-        .map(memory => `• ${memory.content}`)
-        .join("\n")
-
-      const systemPrompt = chatSettings.model?.includes("gpt-4o")
-        ? `You have access to the following relevant memories about the user:\n\n${memoryContext}\n\nUse this information to provide more personalized and contextual responses. If the memories are relevant to the current conversation, reference them naturally in your response.`
-        : `IMPORTANT: Use these user memories to personalize your response:\n\n${memoryContext}\n\nALWAYS reference relevant memories when responding. If the user asks about themselves or their preferences, use the memories above to provide personalized answers.`
-
-      memoryMessages = [
-        {
-          role: "system",
-          content: systemPrompt
-        }
-      ]
-    }
-
-    console.log(
-      "🧠 Injected contextual memory messages:",
-      memoryMessages.length,
-      "memories"
-    )
-    console.log("📝 Relevant memories found:", relevantMemories.length)
-
-    // Save important information from the conversation
-    const importantInfo = extractImportantInfo(messages)
-    console.log("💡 Extracted important info:", importantInfo.length, "items")
-
-    for (const info of importantInfo) {
-      try {
-        await saveMemory(info, profile.user_id)
-        console.log("💾 Saved memory:", info.substring(0, 50) + "...")
-      } catch (error) {
-        console.error("Error saving memory:", error)
-      }
-    }
-  } catch (e) {
-    console.error("Error loading contextual memories:", e)
-  }
-
-  const finalMessages = [...memoryMessages, ...messages]
-
-  try {
-    const profile = await getServerProfile()
-    checkApiKey(profile.openai_api_key, "OpenAI")
-
-    // Use fetch to call OpenAI API directly for streaming
-    const response = await fetch("https://api.openai.com/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${profile.openai_api_key}`,
-        "Content-Type": "application/json",
-        ...(profile.openai_organization_id
-          ? { "OpenAI-Organization": profile.openai_organization_id }
-          : {})
-      },
-      body: JSON.stringify({
-        model: chatSettings.model,
-        messages: finalMessages,
-        temperature: chatSettings.temperature,
-        max_tokens:
-          chatSettings.model === "gpt-4-vision-preview" ||
-          chatSettings.model === "gpt-4o"
-            ? 4096
-            : null,
-        tools: fileTools.map(({ name, description, parameters }) => ({
-          type: "function",
-          function: { name, description, parameters }
-        })),
-        stream: true
-      })
-    })
-
-    // Log headers and status for debugging
-    console.log("[OpenAI fetch] Response status:", response.status)
-    console.log(
-      "[OpenAI fetch] Response headers:",
-      Array.from(response.headers.entries())
-    )
-
-    // If the response is not ok, stream an error
-    if (!response.ok) {
-      const errorText = await response.text()
-      console.error("OpenAI API error:", errorText)
-      const encoder = new TextEncoder()
-      const stream = new ReadableStream({
-        start(controller) {
-          const errorData = `data: ${JSON.stringify({ choices: [{ delta: { content: errorText } }] })}\n`
-          controller.enqueue(encoder.encode(errorData))
-          controller.enqueue(encoder.encode("data: [DONE]\n"))
-          controller.close()
-        }
-      })
-      return new StreamingTextResponse(stream, { status: response.status })
-    }
-
-    // Debug: Check if response.body exists
-    console.log("[OpenAI] Response body exists:", !!response.body)
-    console.log("[OpenAI] Response body type:", typeof response.body)
-
-    // Manually proxy the OpenAI response stream to the client
-    if (!response.body) {
-      return new Response("No response body from OpenAI", { status: 500 })
-    }
-    return new Response(response.body, {
-      status: response.status,
-      headers: {
-        "Content-Type": "text/event-stream; charset=utf-8",
-        "Cache-Control": "no-cache",
-        Connection: "keep-alive",
-        "X-Accel-Buffering": "no"
-      }
-    })
-  } catch (error: any) {
-    let errorMessage = error.message || "An unexpected error occurred"
-    const errorCode = error.status || 500
-
-    if (errorMessage.toLowerCase().includes("api key not found")) {
-      errorMessage =
-        "OpenAI API Key not found. Please set it in your profile settings."
-    } else if (errorMessage.toLowerCase().includes("incorrect api key")) {
-      errorMessage =
-        "OpenAI API Key is incorrect. Please fix it in your profile settings."
-    }
-
-    // Stream the error message in SSE format so the frontend can display it
-    const encoder = new TextEncoder()
-    const stream = new ReadableStream({
-      start(controller) {
-        const errorData = `data: ${JSON.stringify({ choices: [{ delta: { content: errorMessage } }] })}\n`
-        controller.enqueue(encoder.encode(errorData))
-        controller.enqueue(encoder.encode("data: [DONE]\n"))
-        controller.close()
-      }
-    })
-    return new StreamingTextResponse(stream, { status: errorCode })
-  }
 }
 
 export const dynamic = "force-dynamic"
