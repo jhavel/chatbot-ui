@@ -43,7 +43,7 @@ export const saveMemory = async (content: string, user_id: string) => {
   try {
     // Import the memory system function directly
     const { saveEnhancedMemory } = await import("@/lib/memory-system")
-    return await saveEnhancedMemory(content, user_id)
+    return await saveEnhancedMemory(supabase, content, user_id)
   } catch (error) {
     console.error("[Memory Save Error]", error)
     // Fallback to simple save if enhanced system fails
@@ -87,5 +87,5 @@ export const getUserMemoryStats = async (user_id: string) => {
 }
 
 export const markMemoryAccessed = async (memoryId: string) => {
-  return await updateMemoryAccess(memoryId)
+  return await updateMemoryAccess(supabase, memoryId)
 }

@@ -158,7 +158,7 @@ export const optimizeMemorySystem = async (
 }> => {
   try {
     // Get current memory stats
-    const stats = await getMemoryStats(user_id)
+    const stats = await getMemoryStats(supabase, user_id)
     const totalMemories = stats?.totalMemories || 0
 
     console.log(
@@ -206,7 +206,7 @@ export const getMemoryEfficiencyMetrics = async (
   efficiencyScore: number
 }> => {
   try {
-    const stats = await getMemoryStats(user_id)
+    const stats = await getMemoryStats(supabase, user_id)
     const totalMemories = stats?.totalMemories || 0
     const avgRelevanceScore = stats?.avgRelevanceScore || 0
 
