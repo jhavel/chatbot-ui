@@ -348,6 +348,7 @@ export const processResponse = async (
         const parsed = JSON.parse(messageData)
         const content = parsed.choices?.[0]?.delta?.content
         if (content) {
+          fullText += content
           setFirstTokenReceived(true)
           setToolInUse("none")
           setChatMessages(prev => {
@@ -412,6 +413,7 @@ export const processResponse = async (
         const parsed = JSON.parse(messageData)
         const content = parsed.choices?.[0]?.delta?.content
         if (content) {
+          fullText += content
           setFirstTokenReceived(true)
           setToolInUse("none")
           setChatMessages(prev => {
@@ -461,6 +463,7 @@ export const processResponse = async (
         const parsed = JSON.parse(messageData)
         const content = parsed.choices?.[0]?.delta?.content
         if (content) {
+          fullText += content
           setFirstTokenReceived(true)
           setToolInUse("none")
           setChatMessages(prev => {
@@ -502,6 +505,7 @@ export const processResponse = async (
     }
   }
 
+  console.log("[processResponse] Final fullText:", fullText)
   return fullText
 }
 
