@@ -143,20 +143,10 @@ export const Message: FC<MessageProps> = ({
       return message.content // real-time stream
     }
 
-    // Add debug logging
-    console.log("🔍 [DEBUG] getDisplayContent called for message:", {
-      id: message.id,
-      role: message.role,
-      content: message.content.substring(0, 100) + "...",
-      contentLength: message.content.length
-    })
-
     try {
       const parsed = JSON.parse(message.content)
-      console.log("🔍 [DEBUG] Successfully parsed JSON:", parsed)
       return parsed?.message?.content || message.content
     } catch {
-      console.log("🔍 [DEBUG] Not JSON, returning raw content")
       return message.content
     }
   }

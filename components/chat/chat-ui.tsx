@@ -79,16 +79,6 @@ export const ChatUI: FC<ChatUIProps> = ({}) => {
   const fetchMessages = async () => {
     const fetchedMessages = await getMessagesByChatId(params.chatid as string)
 
-    console.log(
-      "🔍 [DEBUG] fetchMessages - fetchedMessages from DB:",
-      fetchedMessages.map(m => ({
-        id: m.id,
-        role: m.role,
-        content: m.content.substring(0, 100) + "...",
-        contentLength: m.content.length
-      }))
-    )
-
     const imagePromises: Promise<MessageImage>[] = fetchedMessages.flatMap(
       message =>
         message.image_paths
@@ -156,16 +146,6 @@ export const ChatUI: FC<ChatUIProps> = ({}) => {
           )
       }
     })
-
-    console.log(
-      "🔍 [DEBUG] fetchMessages - setting chatMessages:",
-      fetchedChatMessages.map(m => ({
-        id: m.message.id,
-        role: m.message.role,
-        content: m.message.content.substring(0, 100) + "...",
-        contentLength: m.message.content.length
-      }))
-    )
 
     setChatMessages(fetchedChatMessages)
   }

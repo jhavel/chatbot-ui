@@ -703,13 +703,7 @@ export const handleCreateMessages = async (
       return [...prevFileItems, ...newFileItems]
     })
 
-    console.log(
-      "🔍 [DEBUG] About to call setChatMessages with:",
-      finalChatMessages.length,
-      "messages"
-    )
     setChatMessages(finalChatMessages)
-    console.log("🔍 [DEBUG] setChatMessages called successfully")
   }
 
   // Enhanced memory saving with semantic processing

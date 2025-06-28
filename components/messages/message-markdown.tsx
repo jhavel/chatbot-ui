@@ -9,13 +9,6 @@ interface MessageMarkdownProps {
 }
 
 export const MessageMarkdown: FC<MessageMarkdownProps> = ({ content }) => {
-  console.log("🔍 [DEBUG] MessageMarkdown received content:", {
-    content: content.substring(0, 100) + "...",
-    contentLength: content.length,
-    isEmpty: content.length === 0,
-    isWhitespaceOnly: content.trim().length === 0
-  })
-
   return (
     <MessageMarkdownMemoized
       className="prose dark:prose-invert prose-p:leading-relaxed prose-pre:p-0 min-w-full space-y-6 break-words"
@@ -60,7 +53,6 @@ export const MessageMarkdown: FC<MessageMarkdownProps> = ({ content }) => {
               key={Math.random()}
               language={(match && match[1]) || ""}
               value={String(childArray).replace(/\n$/, "")}
-              {...props}
             />
           )
         }

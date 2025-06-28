@@ -469,36 +469,11 @@ export const useChatHandler = () => {
         setToolInUse
       )
 
-      console.log("🔍 [DEBUG] finalRes:", finalRes)
-      console.log("🔍 [DEBUG] finalRes type:", typeof finalRes)
-      if (typeof finalRes === "object" && finalRes !== null) {
-        console.log("🔍 [DEBUG] finalRes.message:", (finalRes as any).message)
-        console.log(
-          "🔍 [DEBUG] finalRes.message?.content:",
-          (finalRes as any).message?.content
-        )
-      }
-
       generatedText =
         typeof finalRes === "string"
           ? finalRes
           : finalRes?.message?.content ||
             "Assistant responded but no content was returned."
-
-      console.log(
-        "🔍 [DEBUG] Generated text:",
-        generatedText.substring(0, 100) + "..."
-      )
-      console.log("🔍 [DEBUG] Generated text length:", generatedText.length)
-      console.log("🔍 [DEBUG] Generated text type:", typeof generatedText)
-      console.log(
-        "🔍 [DEBUG] Generated text is empty:",
-        generatedText.length === 0
-      )
-      console.log(
-        "🔍 [DEBUG] Generated text is whitespace only:",
-        generatedText.trim().length === 0
-      )
 
       if (!currentChat) {
         console.log("🔍 [DEBUG] Creating new chat...")
