@@ -1,5 +1,3 @@
-console.log("🔥 OpenAI route hit")
-
 import { checkApiKey, getServerProfile } from "@/lib/server/server-chat-helpers"
 import { ChatSettings } from "@/types"
 import { ServerRuntime } from "next"
@@ -221,6 +219,3 @@ export async function POST(request: Request) {
     return new StreamingTextResponse(stream)
   }
 }
-
-export const dynamic = "force-dynamic"
-export const maxDuration = 30
