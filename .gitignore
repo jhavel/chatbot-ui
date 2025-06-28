@@ -44,3 +44,12 @@ sw.js
 sw.js.map
 workbox-*.js
 workbox-*.js.map
+
+# Temporary test files
+test-*.js
+test-*.md
+temp*.js
+
+# SQL scripts (keep in migrations only)
+fix-*.sql
+complete-*.sql
