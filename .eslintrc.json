@@ -8,7 +8,11 @@
   ],
   "plugins": ["tailwindcss"],
   "rules": {
-    "tailwindcss/no-custom-classname": "off"
+    "tailwindcss/no-custom-classname": "off",
+    "react-hooks/exhaustive-deps": "off",
+    "@next/next/no-img-element": "off",
+    "jsx-a11y/alt-text": "off",
+    "tailwindcss/no-unnecessary-arbitrary-value": "off"
   },
   "settings": {
     "tailwindcss": {

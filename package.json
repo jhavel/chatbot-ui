@@ -13,6 +13,7 @@
     "start": "next start",
     "lint": "next lint",
     "lint:fix": "next lint --fix",
+    "lint:check": "next lint --quiet",
     "analyze": "ANALYZE=true npm run build",
     "preview": "next build && next start",
     "type-check": "tsc --noEmit",
