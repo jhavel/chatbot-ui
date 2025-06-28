@@ -1,5 +1,3 @@
-import OpenAI from "openai"
-
 // Types for the intelligent memory system
 export interface MemoryCandidate {
   content: string
@@ -67,14 +65,6 @@ export const INTELLIGENT_MEMORY_CONFIG = {
 
 // Conversation context analyzer
 export class ConversationAnalyzer {
-  private openai: OpenAI
-
-  constructor() {
-    this.openai = new OpenAI({
-      apiKey: process.env.OPENAI_API_KEY
-    })
-  }
-
   async analyzeConversation(messages: any[]): Promise<ConversationContext> {
     const recentMessages = messages.slice(-3) // Last 3 messages for context
     const conversationText = recentMessages
@@ -82,7 +72,13 @@ export class ConversationAnalyzer {
       .join("\n")
 
     try {
-      const response = await this.openai.chat.completions.create({
+      // Lazy import OpenAI to avoid webpack issues
+      const { default: OpenAI } = await import("openai")
+      const openai = new OpenAI({
+        apiKey: process.env.OPENAI_API_KEY
+      })
+
+      const response = await openai.chat.completions.create({
         model: "gpt-4o-mini",
         messages: [
           {
