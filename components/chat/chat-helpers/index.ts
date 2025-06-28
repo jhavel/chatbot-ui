@@ -600,6 +600,16 @@ export const handleCreateMessages = async (
     image_paths: []
   }
 
+  console.log("🔍 [DEBUG] finalUserMessage content:", finalUserMessage.content)
+  console.log(
+    "🔍 [DEBUG] finalAssistantMessage content:",
+    finalAssistantMessage.content
+  )
+  console.log(
+    "🔍 [DEBUG] finalAssistantMessage content length:",
+    finalAssistantMessage.content.length
+  )
+
   let finalChatMessages: ChatMessage[] = []
 
   if (isRegeneration) {
@@ -693,7 +703,13 @@ export const handleCreateMessages = async (
       return [...prevFileItems, ...newFileItems]
     })
 
+    console.log(
+      "🔍 [DEBUG] About to call setChatMessages with:",
+      finalChatMessages.length,
+      "messages"
+    )
     setChatMessages(finalChatMessages)
+    console.log("🔍 [DEBUG] setChatMessages called successfully")
   }
 
   // Enhanced memory saving with semantic processing
