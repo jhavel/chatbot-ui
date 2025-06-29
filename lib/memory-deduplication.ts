@@ -15,10 +15,20 @@ const normalizeContent = (content: string): string => {
 export const checkForDuplicates = async (
   content: string,
   user_id: string,
-  similarityThreshold: number = 0.95
+  similarityThreshold: number = 0.98
 ): Promise<boolean> => {
-  // Bypass duplicate detection for now
-  return false
+  try {
+    const similarMemories = await findSimilarMemories(
+      content,
+      user_id,
+      similarityThreshold
+    )
+
+    return similarMemories.length > 0
+  } catch (error) {
+    console.error("Error checking for duplicates:", error)
+    return false
+  }
 }
 
 export const findSimilarMemories = async (

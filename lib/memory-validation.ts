@@ -13,7 +13,7 @@
  */
 export const validateMemoryContent = (
   content: string,
-  validationLevel: "strict" | "normal" | "lenient" = "normal"
+  validationLevel: "strict" | "normal" | "lenient" = "lenient"
 ): boolean => {
   if (!content || typeof content !== "string") {
     console.warn("❌ Invalid content type for memory:", typeof content)
@@ -469,14 +469,15 @@ export const validateMemoryContent = (
       break
 
     case "lenient":
-      // Lenient: Only reject obvious AI responses
-      if (hasAIResponse && !hasUserContent && trimmedContent.length > 20) {
+      // Lenient: Only reject very obvious AI responses with no user content
+      if (hasAIResponse && !hasUserContent && trimmedContent.length > 50) {
         console.warn(
           "❌ [LENIENT] Rejected obvious AI response as memory:",
           trimmedContent.substring(0, 50)
         )
         return false
       }
+      // Accept most content in lenient mode
       break
   }
 

@@ -65,6 +65,32 @@ export async function POST(request: NextRequest) {
       })
     }
 
+    if (action === "test_save") {
+      // Test memory saving
+      const testMemory =
+        "I am testing the memory system to see if it works properly"
+      const { saveEnhancedMemory } = await import("@/lib/memory-system")
+
+      try {
+        const savedMemory = await saveEnhancedMemory(
+          supabase,
+          testMemory,
+          user.id
+        )
+        return NextResponse.json({
+          success: true,
+          action: "test_save",
+          memory: savedMemory
+        })
+      } catch (error) {
+        return NextResponse.json({
+          success: false,
+          action: "test_save",
+          error: error instanceof Error ? error.message : "Unknown error"
+        })
+      }
+    }
+
     return NextResponse.json({ error: "Invalid action" }, { status: 400 })
   } catch (error) {
     console.error("Error in memory test:", error)

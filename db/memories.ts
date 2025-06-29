@@ -62,7 +62,10 @@ export const getContextualMemories = async (
   limit: number = 5,
   similarityThreshold: number = 0.6
 ) => {
-  return await getRelevantMemories(
+  const { getRelevantMemoriesWithTracking } = await import(
+    "@/lib/memory-system"
+  )
+  return await getRelevantMemoriesWithTracking(
     supabase,
     user_id,
     context,

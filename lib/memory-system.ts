@@ -159,6 +159,9 @@ export const calculateImportanceScore = (
   return Math.min(score, 1.0)
 }
 
+// Simple in-memory cache to prevent duplicate processing in the same session
+const processedContentCache = new Map<string, Set<string>>()
+
 // Save enhanced memory with semantic analysis and clustering
 export const saveEnhancedMemory = async (
   supabase: any,
@@ -171,12 +174,24 @@ export const saveEnhancedMemory = async (
       throw new Error("Memory content validation failed")
     }
 
+    // Check if this exact content was already processed for this user in this session
+    const contentHash = content.trim().toLowerCase()
+    const userCache = processedContentCache.get(user_id) || new Set()
+    if (userCache.has(contentHash)) {
+      console.log(
+        `⏭️ Content already processed in this session: ${content.substring(0, 50)}...`
+      )
+      throw new Error("Content already processed in this session")
+    }
+    userCache.add(contentHash)
+    processedContentCache.set(user_id, userCache)
+
     console.log(`🧠 Memory save attempt: ${content.substring(0, 50)}...`)
     console.log(`👤 User: ${user_id}`)
 
     // Check for duplicates first
     const { checkForDuplicates } = await import("./memory-deduplication")
-    const isDuplicate = await checkForDuplicates(content, user_id, 0.8)
+    const isDuplicate = await checkForDuplicates(content, user_id, 0.98)
 
     if (isDuplicate) {
       console.log(
@@ -490,5 +505,34 @@ export const getMemoryStats = async (supabase: any, user_id: string) => {
   } catch (error) {
     console.error("Error getting memory stats:", error)
     return null
+  }
+}
+
+// Enhanced memory retrieval with access tracking
+export const getRelevantMemoriesWithTracking = async (
+  supabase: any,
+  user_id: string,
+  currentContext: string,
+  limit: number = 5,
+  similarityThreshold: number = 0.6
+): Promise<SimilarMemory[]> => {
+  try {
+    const memories = await getRelevantMemories(
+      supabase,
+      user_id,
+      currentContext,
+      limit,
+      similarityThreshold
+    )
+
+    // Update access statistics for retrieved memories
+    for (const memory of memories) {
+      await updateMemoryAccess(supabase, memory.id)
+    }
+
+    return memories
+  } catch (error) {
+    console.error("Error retrieving memories with tracking:", error)
+    return []
   }
 }

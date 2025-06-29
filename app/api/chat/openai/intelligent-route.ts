@@ -65,6 +65,41 @@ export async function POST(request: Request) {
       processingTime: `${processingTime}ms`
     })
 
+    // ADDITIONAL MEMORY EXTRACTION - ENHANCED CAPTURE
+    if (memoryResult.shouldProcess) {
+      try {
+        const { extractMemoriesWithConfidence, saveExtractedMemories } =
+          await import("@/lib/memory-extraction")
+
+        const config = {
+          enableProactiveExtraction: true,
+          extractionThreshold: 0.6,
+          maxMemoriesPerConversation: 3,
+          enableSummarization: false,
+          enableDuplicateDetection: true
+        }
+
+        const extractedMemories = await extractMemoriesWithConfidence(
+          messages,
+          profile.user_id,
+          config
+        )
+        if (extractedMemories.length > 0) {
+          await saveExtractedMemories(
+            extractedMemories,
+            profile.user_id,
+            config,
+            supabase
+          )
+          console.log(
+            `📝 Extracted and saved ${extractedMemories.length} additional memories`
+          )
+        }
+      } catch (error) {
+        console.error("Error in additional memory extraction:", error)
+      }
+    }
+
     // Only proceed with memory retrieval if we have meaningful context
     if (currentContext.length > 10) {
       // Get memory count for adaptive thresholds
@@ -75,7 +110,7 @@ export async function POST(request: Request) {
 
       // Use adaptive similarity threshold based on memory count
       const similarityThreshold =
-        memoryCount > 50 ? 0.7 : memoryCount > 20 ? 0.6 : 0.5
+        memoryCount > 50 ? 0.3 : memoryCount > 20 ? 0.25 : 0.2
 
       // Use optimal memory limit
       const memoryLimit = Math.min(
@@ -96,15 +131,25 @@ export async function POST(request: Request) {
 
       console.log("🔍 Found relevant memories:", relevantMemories.length)
 
+      // Log the actual memories being retrieved
+      if (relevantMemories.length > 0) {
+        console.log("📋 Retrieved memories:")
+        relevantMemories.forEach((memory, index) => {
+          console.log(
+            `  ${index + 1}. [${memory.similarity?.toFixed(3)}] ${memory.content.substring(0, 100)}...`
+          )
+        })
+      }
+
       // Create memory context only if we have relevant memories
       if (relevantMemories.length > 0) {
         const memoryContext = relevantMemories
-          .map(memory => `• ${memory.content}`)
+          .map((memory, index) => `${index + 1}. ${memory.content}`)
           .join("\n")
 
         const systemPrompt = chatSettings.model?.includes("gpt-4o")
-          ? `You have access to the following relevant memories about the user:\n\n${memoryContext}\n\nUse this information to provide more personalized and contextual responses. If the memories are relevant to the current conversation, reference them naturally in your response.`
-          : `IMPORTANT: Use these user memories to personalize your response:\n\n${memoryContext}\n\nReference relevant memories when responding to provide personalized answers.`
+          ? `You have access to the following relevant memories about the user:\n\n${memoryContext}\n\nIMPORTANT: Use these memories to provide personalized and contextual responses. If the user asks about something mentioned in these memories, reference the specific memory. If you don't have relevant information in these memories, say so clearly.`
+          : `IMPORTANT: Use these user memories to personalize your response:\n\n${memoryContext}\n\nReference specific memories when responding. If the user asks about something not in these memories, say you don't have that information.`
 
         memoryMessages = [
           {

@@ -158,11 +158,36 @@ export const extractMemoriesWithConfidence = async (
     confidence: number
     type: string
   }> = []
+  const seenContent = new Set<string>()
 
   for (const message of messages) {
     if (message.role === "user") {
       const content = message.content
       const lowerContent = content.toLowerCase()
+      const contentHash = content.trim().toLowerCase()
+
+      // Skip if we've already seen this content
+      if (seenContent.has(contentHash)) {
+        continue
+      }
+      seenContent.add(contentHash)
+
+      // Skip questions - we want to save information, not questions
+      if (
+        content.includes("?") ||
+        content.startsWith("what") ||
+        content.startsWith("how") ||
+        content.startsWith("when") ||
+        content.startsWith("where") ||
+        content.startsWith("why") ||
+        content.startsWith("who") ||
+        content.startsWith("which") ||
+        content.startsWith("do you") ||
+        content.startsWith("can you") ||
+        content.startsWith("could you")
+      ) {
+        continue
+      }
 
       // Personal information (high confidence)
       if (containsPersonalInfo(lowerContent)) {
@@ -171,6 +196,7 @@ export const extractMemoriesWithConfidence = async (
           confidence: 0.9,
           type: "personal"
         })
+        continue // Don't add to other categories
       }
 
       // Preferences (high confidence)
@@ -180,6 +206,7 @@ export const extractMemoriesWithConfidence = async (
           confidence: 0.85,
           type: "preference"
         })
+        continue // Don't add to other categories
       }
 
       // Technical information (medium-high confidence)
@@ -189,6 +216,7 @@ export const extractMemoriesWithConfidence = async (
           confidence: 0.8,
           type: "technical"
         })
+        continue // Don't add to other categories
       }
 
       // Project information (medium confidence)
@@ -197,6 +225,16 @@ export const extractMemoriesWithConfidence = async (
           content,
           confidence: 0.75,
           type: "project"
+        })
+        continue // Don't add to other categories
+      }
+
+      // General user information (lower confidence but still valuable)
+      if (content.length > 10 && content.length < 500) {
+        extractedMemories.push({
+          content,
+          confidence: 0.6,
+          type: "general"
         })
       }
     }
