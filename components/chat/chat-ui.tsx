@@ -59,21 +59,26 @@ export const ChatUI: FC<ChatUIProps> = ({}) => {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
+    // For new chats (no chatid), always set loading to false immediately
+    if (!params.chatid) {
+      setLoading(false)
+      return
+    }
+
+    // For existing chats, don't fetch data while generating
     if (isGenerating) return
+
     const fetchData = async () => {
       await fetchMessages()
       await fetchChat()
       scrollToBottom()
       setIsAtBottom(true)
     }
-    if (params.chatid) {
-      fetchData().then(() => {
-        handleFocusChatInput()
-        setLoading(false)
-      })
-    } else {
+
+    fetchData().then(() => {
+      handleFocusChatInput()
       setLoading(false)
-    }
+    })
   }, [params.chatid, isGenerating])
 
   const fetchMessages = async () => {
