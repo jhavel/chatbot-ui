@@ -70,7 +70,7 @@ export async function POST(request: Request) {
     const toolCalls = message.tool_calls || []
 
     if (toolCalls.length === 0) {
-      return new Response(message.content, {
+      return new Response(JSON.stringify({ content: message.content }), {
         headers: {
           "Content-Type": "application/json"
         }

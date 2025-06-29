@@ -196,7 +196,63 @@ export async function POST(request: Request) {
     }
 
     // Create a stream of the response
-    const stream = OpenAIStream(response)
+    const encoder = new TextEncoder()
+    const stream = new ReadableStream({
+      async start(controller) {
+        try {
+          const reader = response.body?.getReader()
+          if (!reader) {
+            throw new Error("No response body")
+          }
+
+          while (true) {
+            const { done, value } = await reader.read()
+            if (done) break
+
+            const chunk = new TextDecoder().decode(value)
+            const lines = chunk.split("\n")
+
+            for (const line of lines) {
+              if (line.startsWith("data: ")) {
+                const data = line.slice(6)
+                if (data === "[DONE]") {
+                  controller.enqueue(encoder.encode(`data: [DONE]\n\n`))
+                  break
+                }
+                try {
+                  const parsed = JSON.parse(data)
+                  if (parsed.choices?.[0]?.delta?.content) {
+                    controller.enqueue(
+                      encoder.encode(`data: ${JSON.stringify(parsed)}\n\n`)
+                    )
+                  }
+                } catch (e) {
+                  console.error("Error parsing chunk:", e)
+                }
+              }
+            }
+          }
+        } catch (error) {
+          console.error("Streaming error:", error)
+          controller.enqueue(
+            encoder.encode(
+              `data: ${JSON.stringify({
+                choices: [
+                  {
+                    delta: {
+                      content:
+                        "Sorry, I encountered an error. Please try again."
+                    }
+                  }
+                ]
+              })}\n\n`
+            )
+          )
+        } finally {
+          controller.close()
+        }
+      }
+    })
 
     // Return a StreamingTextResponse, which can be consumed by the client
     return new StreamingTextResponse(stream)

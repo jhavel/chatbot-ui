@@ -425,29 +425,37 @@ export const useChatHandler = () => {
         chatImages
       )
 
-      console.log("[DEBUG] About to fetch /api/chat/openai with:", {
-        chatSettings: payload.chatSettings,
-        messages: formattedMessages,
-        tools: fileTools.map(({ name, description, parameters }) => ({
-          type: "function",
-          function: { name, description, parameters }
-        }))
-      })
-      const response = await fetch("/api/chat/openai", {
+      // Determine which API endpoint to use based on selected tools
+      const hasSelectedTools = selectedTools && selectedTools.length > 0
+      const apiEndpoint = hasSelectedTools
+        ? "/api/chat/tools"
+        : "/api/chat/openai"
+
+      const requestBody = hasSelectedTools
+        ? {
+            chatSettings: payload.chatSettings,
+            messages: formattedMessages,
+            selectedTools: selectedTools
+          }
+        : {
+            chatSettings: payload.chatSettings,
+            messages: formattedMessages,
+            tools: fileTools.map(({ name, description, parameters }) => ({
+              type: "function",
+              function: { name, description, parameters }
+            }))
+          }
+
+      console.log("[DEBUG] About to fetch", apiEndpoint, "with:", requestBody)
+
+      const response = await fetch(apiEndpoint, {
         method: "POST",
         headers: {
           "Content-Type": "application/json"
         },
-        body: JSON.stringify({
-          chatSettings: payload.chatSettings,
-          messages: formattedMessages,
-          tools: fileTools.map(({ name, description, parameters }) => ({
-            type: "function",
-            function: { name, description, parameters }
-          }))
-        })
+        body: JSON.stringify(requestBody)
       }).catch(err => {
-        console.error("[DEBUG] fetch /api/chat/openai error:", err)
+        console.error("[DEBUG] fetch", apiEndpoint, "error:", err)
         throw err
       })
 

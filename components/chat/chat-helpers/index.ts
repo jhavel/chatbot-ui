@@ -295,13 +295,32 @@ export const fetchChatResponse = async (
         )
       }
 
-      const errorData = await response.json()
+      let errorMessage = "An error occurred"
+      try {
+        const errorData = await response.json()
+        errorMessage = errorData.message || errorMessage
+      } catch (parseError) {
+        // If JSON parsing fails, try to get the response as text
+        try {
+          const errorText = await response.text()
+          errorMessage = errorText || errorMessage
+        } catch (textError) {
+          console.error(
+            "[fetchChatResponse] Failed to parse error response:",
+            textError
+          )
+        }
+      }
 
-      toast.error(errorData.message)
+      toast.error(errorMessage)
 
       setIsGenerating(false)
       setChatMessages(prevMessages => prevMessages.slice(0, -2))
-      console.error("[fetchChatResponse] Error response:", response, errorData)
+      console.error(
+        "[fetchChatResponse] Error response:",
+        response,
+        errorMessage
+      )
     }
 
     return response
@@ -321,6 +340,53 @@ export const processResponse = async (
   setToolInUse: React.Dispatch<React.SetStateAction<string>>
 ): Promise<ProcessResponseResult> => {
   console.log("[processResponse] called. Response:", response)
+
+  // Check if this is a non-streaming JSON response (from tools route when no tool calls)
+  const contentType = response.headers.get("content-type")
+  if (contentType && contentType.includes("application/json")) {
+    try {
+      const jsonResponse = await response.json()
+      console.log(
+        "[processResponse] Non-streaming JSON response:",
+        jsonResponse
+      )
+
+      if (jsonResponse.content) {
+        const content = jsonResponse.content
+        setFirstTokenReceived(true)
+        setToolInUse("none")
+        setChatMessages(prev => {
+          const updated = prev.map((chatMessage, idx, arr) => {
+            const isLastTempAssistant =
+              chatMessage.message.role === "assistant" &&
+              typeof chatMessage.message.id === "string" &&
+              chatMessage.message.id.startsWith("temp-") &&
+              idx ===
+                arr.map(m => m.message.id).lastIndexOf(chatMessage.message.id)
+            if (isLastTempAssistant) {
+              return {
+                ...chatMessage,
+                message: {
+                  ...chatMessage.message,
+                  content: content
+                }
+              }
+            }
+            return chatMessage
+          })
+          return [...updated]
+        })
+        return content
+      }
+
+      return jsonResponse
+    } catch (error) {
+      console.error("[processResponse] Error parsing JSON response:", error)
+      throw error
+    }
+  }
+
+  // Handle streaming response
   let fullText = ""
   if (!response.body) {
     console.error("[processResponse] ERROR: response.body is null")
