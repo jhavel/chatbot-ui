@@ -79,6 +79,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+DROP TRIGGER IF EXISTS update_cluster_memory_count_trigger ON memories;
 CREATE TRIGGER update_cluster_memory_count_trigger
     AFTER INSERT OR UPDATE OR DELETE ON memories
     FOR EACH ROW

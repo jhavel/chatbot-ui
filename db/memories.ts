@@ -24,6 +24,9 @@ export const getMemoriesByUserId = async (user_id: string) => {
       COALESCE(semantic_tags, '{}') as semantic_tags, 
       COALESCE(memory_type, 'general') as memory_type, 
       COALESCE(importance_score, 0.5) as importance_score, 
+      COALESCE(reviewed, false) as reviewed,
+      reviewed_at,
+      reviewed_by,
       user_id
     `
     )

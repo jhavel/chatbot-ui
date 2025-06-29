@@ -44,7 +44,9 @@ import {
   Activity,
   Target,
   RefreshCw,
-  Trash2
+  Trash2,
+  Sparkles,
+  CheckCircle
 } from "lucide-react"
 import { toast } from "sonner"
 
@@ -57,6 +59,7 @@ export default function MemoryPage() {
   const [loading, setLoading] = useState(true)
   const [activeTab, setActiveTab] = useState("overview")
   const [regenerating, setRegenerating] = useState(false)
+  const [cleaning, setCleaning] = useState(false)
   const [deletingMemoryId, setDeletingMemoryId] = useState<string | null>(null)
   const supabase = createClientComponentClient()
 
@@ -193,6 +196,61 @@ export default function MemoryPage() {
     }
   }
 
+  const handleMemoryCleanup = async () => {
+    setCleaning(true)
+    try {
+      const response = await fetch("/api/memory/cleanup", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          action: "comprehensive_cleanup",
+          options: {
+            duplicateThreshold: 0.95,
+            similarityThreshold: 0.9,
+            minLength: 200
+          }
+        })
+      })
+
+      const result = await response.json()
+
+      if (response.ok) {
+        console.log("✅ Memory cleanup completed:", result)
+
+        // Show detailed results
+        const { results } = result
+        toast.success(
+          `Memory cleanup completed! Removed ${results.duplicatesRemoved} duplicates, consolidated ${results.similarConsolidated} similar memories, summarized ${results.memoriesSummarized} long memories, reclassified ${results.memoriesReclassified} memories, and marked ${results.memoriesMarkedReviewed} as reviewed.`
+        )
+
+        // Reload the data
+        const {
+          data: { user }
+        } = await supabase.auth.getUser()
+        if (user) {
+          const [memoriesData, clustersData, statsData] = await Promise.all([
+            getMemoriesByUserId(user.id),
+            getUserMemoryClusters(user.id),
+            getUserMemoryStats(user.id)
+          ])
+          setMemories(memoriesData)
+          setClusters(clustersData)
+          setStats(statsData)
+        }
+      } else {
+        console.error("❌ Failed to cleanup memories:", result)
+        toast.error("Failed to cleanup memories")
+      }
+    } catch (error) {
+      console.error("❌ Error cleaning up memories:", error)
+      toast.error("Error cleaning up memories")
+    } finally {
+      setCleaning(false)
+    }
+  }
+
   const getMemoryTypeColor = (type: string) => {
     const colors = {
       personal: "bg-blue-100 text-blue-800",
@@ -237,17 +295,30 @@ export default function MemoryPage() {
           <Brain className="size-8 text-blue-600" />
           <h1 className="text-3xl font-bold">Memory System</h1>
         </div>
-        <Button
-          onClick={handleRegenerateEmbeddings}
-          disabled={regenerating}
-          variant="outline"
-          size="sm"
-        >
-          <RefreshCw
-            className={`mr-2 size-4 ${regenerating ? "animate-spin" : ""}`}
-          />
-          {regenerating ? "Regenerating..." : "Regenerate Embeddings"}
-        </Button>
+        <div className="flex items-center space-x-2">
+          <Button
+            onClick={handleMemoryCleanup}
+            disabled={cleaning}
+            variant="outline"
+            size="sm"
+          >
+            <Sparkles
+              className={`mr-2 size-4 ${cleaning ? "animate-spin" : ""}`}
+            />
+            {cleaning ? "Cleaning..." : "Cleanup Memories"}
+          </Button>
+          <Button
+            onClick={handleRegenerateEmbeddings}
+            disabled={regenerating}
+            variant="outline"
+            size="sm"
+          >
+            <RefreshCw
+              className={`mr-2 size-4 ${regenerating ? "animate-spin" : ""}`}
+            />
+            {regenerating ? "Regenerating..." : "Regenerate Embeddings"}
+          </Button>
+        </div>
       </div>
 
       <Tabs
@@ -456,6 +527,11 @@ export default function MemoryPage() {
                           >
                             {memory.memory_type || "general"}
                           </Badge>
+                          {memory.reviewed && (
+                            <span title="Reviewed">
+                              <CheckCircle className="size-4 text-green-500" />
+                            </span>
+                          )}
                           <div className="text-xs text-gray-500">
                             <div className="flex items-center space-x-1">
                               <TrendingUp className="size-3" />
@@ -579,6 +655,11 @@ export default function MemoryPage() {
                               >
                                 {memory.memory_type || "general"}
                               </Badge>
+                              {memory.reviewed && (
+                                <span title="Reviewed">
+                                  <CheckCircle className="size-4 text-green-500" />
+                                </span>
+                              )}
                               <div className="text-xs text-gray-500">
                                 <div className="flex items-center space-x-1">
                                   <TrendingUp className="size-3" />
@@ -660,6 +741,11 @@ export default function MemoryPage() {
                             >
                               {memory.memory_type || "general"}
                             </Badge>
+                            {memory.reviewed && (
+                              <span title="Reviewed">
+                                <CheckCircle className="size-4 text-green-500" />
+                              </span>
+                            )}
                             {memory.semantic_tags &&
                               memory.semantic_tags.length > 0 && (
                                 <div className="flex items-center space-x-1">
@@ -702,7 +788,11 @@ export default function MemoryPage() {
                             </div>
                             <div className="flex items-center space-x-1">
                               <Star className="size-3" />
-                              <span>
+                              <span
+                                className={getRelevanceColor(
+                                  memory.importance_score
+                                )}
+                              >
                                 {formatScore(memory.importance_score)}
                               </span>
                             </div>

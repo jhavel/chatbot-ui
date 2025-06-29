@@ -11,6 +11,9 @@ export interface Memory {
   semantic_tags: string[]
   memory_type: string
   importance_score: number
+  reviewed?: boolean
+  reviewed_at?: string
+  reviewed_by?: string
 }
 
 export interface MemoryCluster {
