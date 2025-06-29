@@ -64,31 +64,6 @@ export const ChatItem: FC<ChatItemProps> = ({ chat }) => {
       onKeyDown={handleKeyDown}
       onClick={handleClick}
     >
-      {chat.assistant_id ? (
-        assistantImage ? (
-          <Image
-            style={{ width: "30px", height: "30px" }}
-            className="rounded"
-            src={assistantImage}
-            alt="Assistant image"
-            width={30}
-            height={30}
-          />
-        ) : (
-          <IconRobotFace
-            className="bg-primary text-secondary border-primary rounded border-DEFAULT p-1"
-            size={30}
-          />
-        )
-      ) : (
-        <WithTooltip
-          delayDuration={200}
-          display={<div>{MODEL_DATA?.modelName}</div>}
-        >
-          <ModelIcon provider={MODEL_DATA?.provider} height={30} width={30} />
-        </WithTooltip>
-      )}
-
       <div className="ml-3 flex-1 truncate text-sm font-semibold">
         {chat.name}
       </div>
