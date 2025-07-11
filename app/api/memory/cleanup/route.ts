@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server"
+import { NextRequest } from "next/server"
 import { getServerProfile } from "@/lib/server/server-chat-helpers"
 import { createClient } from "@/lib/supabase/client"
 import {
@@ -28,76 +28,85 @@ export async function POST(request: NextRequest) {
       `🧹 Memory cleanup request: ${action} for user ${profile.user_id}`
     )
 
+    let result
+    let status = 200
+
     switch (action) {
       case "comprehensive_cleanup":
-        return await performComprehensiveCleanup(profile.user_id, options)
-
-      case "remove_duplicates":
+        result = await performComprehensiveCleanup(profile.user_id, options)
+        break
+      case "remove_duplicates": {
         const duplicateThreshold = options?.duplicateThreshold || 0.95
         const removedCount = await removeDuplicateMemories(
           profile.user_id,
           duplicateThreshold
         )
-        return NextResponse.json({
+        result = {
           success: true,
           action: "remove_duplicates",
           removedCount,
           duplicateThreshold
-        })
-
-      case "cleanup_exact_duplicates":
+        }
+        break
+      }
+      case "cleanup_exact_duplicates": {
         const cleanupCount = await cleanupDuplicateMemories(profile.user_id)
-        return NextResponse.json({
+        result = {
           success: true,
           action: "cleanup_exact_duplicates",
           removedCount: cleanupCount
-        })
-
-      case "consolidate_similar":
+        }
+        break
+      }
+      case "consolidate_similar": {
         const similarityThreshold = options?.similarityThreshold || 0.9
         const consolidatedCount = await consolidateSimilarMemories(
           profile.user_id,
           similarityThreshold
         )
-        return NextResponse.json({
+        result = {
           success: true,
           action: "consolidate_similar",
           consolidatedCount,
           similarityThreshold
-        })
-
+        }
+        break
+      }
       case "summarize_long_memories":
-        return await summarizeLongMemories(profile.user_id, options)
-
+        result = await summarizeLongMemories(profile.user_id, options)
+        break
       case "reclassify_memories":
-        return await reclassifyMemories(profile.user_id, options)
-
-      case "mark_reviewed":
+        result = await reclassifyMemories(profile.user_id, options)
+        break
+      case "mark_reviewed": {
         const memoryIds = options?.memoryIds || []
         const markedCount = await markMemoriesAsReviewed(
           memoryIds,
           profile.user_id
         )
-        return NextResponse.json({
+        result = {
           success: true,
           action: "mark_reviewed",
           markedCount
-        })
-
+        }
+        break
+      }
       default:
-        return NextResponse.json(
-          {
-            error:
-              "Invalid action. Supported actions: comprehensive_cleanup, remove_duplicates, cleanup_exact_duplicates, consolidate_similar, summarize_long_memories, reclassify_memories, mark_reviewed"
-          },
-          { status: 400 }
-        )
+        result = {
+          error:
+            "Invalid action. Supported actions: comprehensive_cleanup, remove_duplicates, cleanup_exact_duplicates, consolidate_similar, summarize_long_memories, reclassify_memories, mark_reviewed"
+        }
+        status = 400
     }
+    return new Response(JSON.stringify(result), {
+      status,
+      headers: { "Content-Type": "application/json" }
+    })
   } catch (error) {
     console.error("❌ Memory cleanup error:", error)
-    return NextResponse.json(
-      { error: "Internal server error during memory cleanup" },
-      { status: 500 }
+    return new Response(
+      JSON.stringify({ error: "Internal server error during memory cleanup" }),
+      { status: 500, headers: { "Content-Type": "application/json" } }
     )
   }
 }
@@ -169,17 +178,16 @@ async function performComprehensiveCleanup(user_id: string, options: any = {}) {
 
     console.log(`✅ Comprehensive cleanup completed:`, results)
 
-    return NextResponse.json({
+    return {
       success: true,
       action: "comprehensive_cleanup",
       results
-    })
+    }
   } catch (error) {
     console.error("Error during comprehensive cleanup:", error)
-    return NextResponse.json(
-      { error: "Failed to perform comprehensive cleanup" },
-      { status: 500 }
-    )
+    return {
+      error: "Failed to perform comprehensive cleanup"
+    }
   }
 }
 
