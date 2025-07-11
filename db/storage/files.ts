@@ -28,18 +28,43 @@ export const uploadFile = async (
     })
 
   if (error) {
-    throw new Error("Error uploading file")
+    console.error("File upload error:", error)
+    throw new Error(`Error uploading file: ${error.message}`)
   }
 
   return filePath
 }
 
-export const deleteFileFromStorage = async (filePath: string) => {
-  const { error } = await supabase.storage.from("files").remove([filePath])
+export const deleteFileFromStorage = async (filePath: string, retries = 3) => {
+  for (let attempt = 1; attempt <= retries; attempt++) {
+    try {
+      const { error } = await supabase.storage.from("files").remove([filePath])
 
-  if (error) {
-    toast.error("Failed to remove file!")
-    return
+      if (error) {
+        if (attempt === retries) {
+          console.error(
+            `Storage deletion failed after ${retries} attempts:`,
+            error
+          )
+          throw new Error(
+            `Failed to delete file from storage: ${error.message}`
+          )
+        }
+
+        // Wait before retry with exponential backoff
+        await new Promise(resolve => setTimeout(resolve, 1000 * attempt))
+        continue
+      }
+
+      return true
+    } catch (error) {
+      if (attempt === retries) {
+        throw error
+      }
+
+      console.warn(`Storage deletion attempt ${attempt} failed:`, error)
+      await new Promise(resolve => setTimeout(resolve, 1000 * attempt))
+    }
   }
 }
 
@@ -49,8 +74,8 @@ export const getFileFromStorage = async (filePath: string) => {
     .createSignedUrl(filePath, 60 * 60 * 24) // 24hrs
 
   if (error) {
-    console.error(`Error uploading file with path: ${filePath}`, error)
-    throw new Error("Error downloading file")
+    console.error(`Error creating signed URL for file: ${filePath}`, error)
+    throw new Error(`Error downloading file: ${error.message}`)
   }
 
   return data.signedUrl

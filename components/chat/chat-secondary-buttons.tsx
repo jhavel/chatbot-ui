@@ -3,11 +3,13 @@ import { ChatbotUIContext } from "@/context/context"
 import { IconInfoCircle, IconMessagePlus } from "@tabler/icons-react"
 import { FC, useContext } from "react"
 import { WithTooltip } from "../ui/with-tooltip"
+import { FileManagerDemo } from "./file-manager-demo"
+import { AIFileUpload } from "./ai-file-upload"
 
 interface ChatSecondaryButtonsProps {}
 
 export const ChatSecondaryButtons: FC<ChatSecondaryButtonsProps> = ({}) => {
-  const { selectedChat } = useContext(ChatbotUIContext)
+  const { selectedChat, selectedWorkspace } = useContext(ChatbotUIContext)
 
   const { handleNewChat } = useChatHandler()
 
@@ -69,6 +71,20 @@ export const ChatSecondaryButtons: FC<ChatSecondaryButtonsProps> = ({}) => {
               />
             </div>
           </WithTooltip>
+
+          {/* File Upload Options */}
+          {selectedWorkspace && (
+            <div className="mt-1 flex gap-1">
+              <AIFileUpload
+                workspaceId={selectedWorkspace.id}
+                onFileUploaded={file => {
+                  console.log("AI uploaded file:", file)
+                }}
+                className="text-xs"
+                showManualOption={true}
+              />
+            </div>
+          )}
         </>
       )}
     </>

@@ -83,7 +83,7 @@ export const SidebarSwitcher: FC<SidebarSwitcherProps> = ({
         {/* TODO */}
         {/* <Alerts /> */}
 
-        <WithTooltip display={<div>Profile Settings</div>}>
+        <WithTooltip display={<div>Profile Settings</div>} asChild={true}>
           <ProfileSettings />
         </WithTooltip>
       </div>

@@ -76,6 +76,11 @@ OPENAI_API_KEY=your_openai_api_key
 ANTHROPIC_API_KEY=your_anthropic_api_key
 GOOGLE_API_KEY=your_google_api_key
 
+# File Storage and AI Processing
+SUPABASE_STORAGE_BUCKET=your_bucket_name
+FILE_UPLOAD_MAX_SIZE=10485760
+AI_PROCESSING_ENABLED=true
+
 # Authentication
 NEXTAUTH_URL=https://your-domain.com
 NEXTAUTH_SECRET=your_nextauth_secret
@@ -491,11 +496,14 @@ export async function GET() {
 # Link to production project
 supabase link --project-ref your-project-ref
 
-# Push migrations
+# Push migrations (includes enhanced file system)
 supabase db push
 
 # Generate types
 supabase gen types typescript --project-id your-project-id > types/supabase.ts
+
+# Verify enhanced file system migration
+supabase db diff
 ```
 
 #### 3. Configure RLS Policies
@@ -516,7 +524,23 @@ CREATE POLICY "Users can update own profile" ON profiles
   FOR UPDATE USING (auth.uid() = id);
 ```
 
-#### 4. Set Up Backups
+#### 4. Enhanced File System Setup
+
+```bash
+# Verify enhanced files table exists
+supabase db diff --schema public
+
+# Check AI processing functions
+supabase db diff --schema public | grep -i "ai\|file"
+
+# Test file upload functionality
+curl -X POST https://your-domain.com/api/files/ai-upload \
+  -F "files=@test.pdf" \
+  -F "workspace_id=test-workspace" \
+  -H "Authorization: Bearer your-token"
+```
+
+#### 5. Set Up Backups
 
 ```bash
 # Enable point-in-time recovery
@@ -524,6 +548,9 @@ CREATE POLICY "Users can update own profile" ON profiles
 
 # Set up automated backups
 -- Configure backup schedule in Supabase dashboard
+
+# Backup file storage
+-- Configure Supabase Storage backup in dashboard
 ```
 
 ### Database Optimization
@@ -648,6 +675,74 @@ const nextConfig = {
       },
     ]
   },
+}
+```
+
+### File System Optimization
+
+#### 1. File Storage Configuration
+
+```typescript
+// lib/file-storage.ts
+import { createClient } from '@supabase/supabase-js'
+
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!
+)
+
+export const uploadFile = async (file: File, path: string) => {
+  const { data, error } = await supabase.storage
+    .from('files')
+    .upload(path, file, {
+      cacheControl: '3600',
+      upsert: false
+    })
+  
+  return { data, error }
+}
+```
+
+#### 2. AI Processing Queue
+
+```typescript
+// lib/ai-processing-queue.ts
+import { Queue } from 'bull'
+
+const aiProcessingQueue = new Queue('ai-file-processing', {
+  redis: process.env.REDIS_URL
+})
+
+aiProcessingQueue.process(async (job) => {
+  const { fileId, content } = job.data
+  
+  // Process file with AI
+  const metadata = await processFileWithAI(content)
+  
+  // Update database
+  await updateFileMetadata(fileId, metadata)
+})
+```
+
+#### 3. File Caching Strategy
+
+```typescript
+// lib/file-cache.ts
+import { LRUCache } from 'lru-cache'
+
+const fileMetadataCache = new LRUCache<string, any>({
+  max: 500,
+  ttl: 1000 * 60 * 30, // 30 minutes
+})
+
+export const getCachedFileMetadata = async (fileId: string) => {
+  if (fileMetadataCache.has(fileId)) {
+    return fileMetadataCache.get(fileId)
+  }
+  
+  const metadata = await fetchFileMetadata(fileId)
+  fileMetadataCache.set(fileId, metadata)
+  return metadata
 }
 ```
 

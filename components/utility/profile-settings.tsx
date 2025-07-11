@@ -23,7 +23,7 @@ import {
 } from "@tabler/icons-react"
 import Image from "next/image"
 import { useRouter } from "next/navigation"
-import { FC, useCallback, useContext, useRef, useState } from "react"
+import React, { useCallback, useContext, useRef, useState } from "react"
 import { toast } from "sonner"
 import { SIDEBAR_ICON_SIZE } from "../sidebar/sidebar-switcher"
 import { Button } from "../ui/button"
@@ -45,7 +45,10 @@ import { ThemeSwitcher } from "./theme-switcher"
 
 interface ProfileSettingsProps {}
 
-export const ProfileSettings: FC<ProfileSettingsProps> = ({}) => {
+export const ProfileSettings = React.forwardRef<
+  HTMLButtonElement,
+  ProfileSettingsProps
+>(({}, ref) => {
   const {
     profile,
     setProfile,
@@ -305,7 +308,7 @@ export const ProfileSettings: FC<ProfileSettingsProps> = ({}) => {
             alt={"Image"}
           />
         ) : (
-          <Button size="icon" variant="ghost">
+          <Button ref={ref} size="icon" variant="ghost">
             <IconUser size={SIDEBAR_ICON_SIZE} />
           </Button>
         )}
@@ -434,14 +437,16 @@ export const ProfileSettings: FC<ProfileSettingsProps> = ({}) => {
 
             <TabsContent className="mt-4 space-y-4" value="keys">
               <div className="mt-5 space-y-2">
-                <Label className="flex items-center">
-                  {useAzureOpenai
-                    ? envKeyMap["azure"]
-                      ? ""
-                      : "Azure OpenAI API Key"
-                    : envKeyMap["openai"]
-                      ? ""
-                      : "OpenAI API Key"}
+                <div className="flex items-center">
+                  <Label>
+                    {useAzureOpenai
+                      ? envKeyMap["azure"]
+                        ? ""
+                        : "Azure OpenAI API Key"
+                      : envKeyMap["openai"]
+                        ? ""
+                        : "OpenAI API Key"}
+                  </Label>
 
                   <Button
                     className={cn(
@@ -457,7 +462,7 @@ export const ProfileSettings: FC<ProfileSettingsProps> = ({}) => {
                       ? "Switch To Standard OpenAI"
                       : "Switch To Azure OpenAI"}
                   </Button>
-                </Label>
+                </div>
 
                 {useAzureOpenai ? (
                   <>
@@ -759,4 +764,6 @@ export const ProfileSettings: FC<ProfileSettingsProps> = ({}) => {
       </SheetContent>
     </Sheet>
   )
-}
+})
+
+ProfileSettings.displayName = "ProfileSettings"

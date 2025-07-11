@@ -1,11 +1,16 @@
+"use client"
+
 import { FileIcon } from "@/components/ui/file-icon"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { Button } from "@/components/ui/button"
 import { FILE_DESCRIPTION_MAX, FILE_NAME_MAX } from "@/db/limits"
 import { getFileFromStorage } from "@/db/storage/files"
 import { Tables } from "@/supabase/types"
-import { FC, useState } from "react"
+import { FC, useState, useContext } from "react"
 import { SidebarItem } from "../all/sidebar-display-item"
+import { Grid3X3 } from "lucide-react"
+import { ChatbotUIContext } from "@/context/context"
 
 interface FileItemProps {
   file: Tables<"files">
@@ -15,10 +20,18 @@ export const FileItem: FC<FileItemProps> = ({ file }) => {
   const [name, setName] = useState(file.name)
   const [isTyping, setIsTyping] = useState(false)
   const [description, setDescription] = useState(file.description)
+  const { selectedWorkspace } = useContext(ChatbotUIContext)
 
   const getLinkAndView = async () => {
     const link = await getFileFromStorage(file.file_path)
     window.open(link, "_blank")
+  }
+
+  const openEnhancedFileManager = () => {
+    // Navigate to the enhanced file manager page using current workspace
+    if (selectedWorkspace) {
+      window.location.href = `/workspace/${selectedWorkspace.id}/files`
+    }
   }
 
   return (
@@ -30,14 +43,25 @@ export const FileItem: FC<FileItemProps> = ({ file }) => {
       updateState={{ name, description }}
       renderInputs={() => (
         <>
-          <div
-            className="cursor-pointer underline hover:opacity-50"
-            onClick={getLinkAndView}
-          >
-            View {file.name}
+          <div className="mb-4 flex items-center gap-2">
+            <div
+              className="cursor-pointer underline hover:opacity-50"
+              onClick={getLinkAndView}
+            >
+              View {file.name}
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={openEnhancedFileManager}
+              className="ml-auto"
+            >
+              <Grid3X3 className="mr-1 size-4" />
+              Enhanced View
+            </Button>
           </div>
 
-          <div className="flex flex-col justify-between">
+          <div className="mb-4 flex flex-col justify-between">
             <div>{file.type}</div>
 
             <div>{formatFileSize(file.size)}</div>

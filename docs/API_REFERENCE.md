@@ -485,7 +485,52 @@ data: [DONE]
 
 ## 📁 File API
 
-### Upload File
+### AI-Powered File Upload
+
+**Endpoint:** `POST /api/files/ai-upload`
+
+**Request:** Multipart form data
+
+```javascript
+const formData = new FormData()
+formData.append('files', file1)
+formData.append('files', file2)
+formData.append('workspace_id', 'workspace-uuid')
+formData.append('enable_ai_processing', 'true')
+formData.append('custom_tags', 'project,important')
+
+const response = await fetch('/api/files/ai-upload', {
+  method: 'POST',
+  headers: {
+    'Authorization': `Bearer ${token}`
+  },
+  body: formData
+})
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "files": [
+    {
+      "id": "file-uuid",
+      "name": "AI Generated Title",
+      "description": "AI Generated Description",
+      "tags": ["ai-generated", "documentation"],
+      "ai_processing_status": "completed",
+      "ai_generated_title": "E-commerce Platform Requirements",
+      "ai_generated_description": "Comprehensive requirements document...",
+      "ai_generated_tags": ["requirements", "e-commerce", "specification"],
+      "file_size": 12345,
+      "file_type": "pdf",
+      "uploaded_at": "2024-12-01T10:00:00Z"
+    }
+  ]
+}
+```
+
+### Standard File Upload
 
 **Endpoint:** `POST /api/files/upload`
 
@@ -496,7 +541,10 @@ const formData = new FormData()
 formData.append('file', file)
 formData.append('name', 'document.pdf')
 formData.append('description', 'Project documentation')
-formData.append('folder_id', 'folder-uuid')
+formData.append('tags', 'documentation,project,important')
+formData.append('workspace_id', 'workspace-uuid')
+formData.append('related_entity_id', 'chat-uuid')
+formData.append('related_entity_type', 'chat')
 
 const response = await fetch('/api/files/upload', {
   method: 'POST',
@@ -515,25 +563,34 @@ const response = await fetch('/api/files/upload', {
     "id": "file-uuid",
     "name": "document.pdf",
     "description": "Project documentation",
+    "tags": ["documentation", "project", "important"],
     "type": "pdf",
     "size": 1024000,
     "tokens": 5000,
     "file_path": "/files/user-uuid/document.pdf",
+    "workspace_id": "workspace-uuid",
+    "related_entity_id": "chat-uuid",
+    "related_entity_type": "chat",
+    "uploaded_at": "2024-12-01T10:00:00Z",
     "created_at": "2024-12-01T10:00:00Z"
   }
 }
 ```
 
-### List Files
+### List Files (Enhanced)
 
 **Endpoint:** `GET /api/files/list`
 
 **Query Parameters:**
-- `user_id` (string, required): User ID
-- `folder_id` (string): Filter by folder
-- `type` (string): Filter by file type
+- `workspace_id` (string, required): Workspace ID
+- `search` (string): Search query for file name and description
+- `tags` (string): Comma-separated tags to filter by
+- `types` (string): Comma-separated file types to filter by
+- `sort_by` (string): Sort field (name, uploaded_at, file_size, file_type)
+- `sort_order` (string): Sort order (ASC, DESC)
 - `limit` (number): Number of files (default: 20)
 - `offset` (number): Number to skip (default: 0)
+- `ai_processed` (boolean): Filter by AI processing status
 
 **Response:**
 ```json
@@ -543,15 +600,70 @@ const response = await fetch('/api/files/upload', {
       "id": "file-uuid",
       "name": "document.pdf",
       "description": "Project documentation",
+      "tags": ["documentation", "project", "important"],
       "type": "pdf",
       "size": 1024000,
       "tokens": 5000,
       "file_path": "/files/user-uuid/document.pdf",
+      "workspace_id": "workspace-uuid",
+      "uploaded_by": "user@example.com",
+      "uploaded_at": "2024-12-01T10:00:00Z",
+      "ai_processing_status": "completed",
+      "ai_generated_title": "E-commerce Platform Requirements",
+      "ai_generated_description": "Comprehensive requirements document...",
+      "ai_generated_tags": ["requirements", "e-commerce", "specification"],
       "created_at": "2024-12-01T10:00:00Z"
     }
   ],
   "total_count": 25,
-  "has_more": true
+  "has_more": true,
+  "filters": {
+    "available_tags": ["documentation", "project", "important", "requirements"],
+    "available_types": ["pdf", "docx", "txt", "md"]
+  }
+}
+```
+
+### File Statistics
+
+**Endpoint:** `GET /api/files/stats`
+
+**Query Parameters:**
+- `workspace_id` (string, required): Workspace ID
+
+**Response:**
+```json
+{
+  "stats": {
+    "totalFiles": 150,
+    "totalSize": 1024000000,
+    "totalTokens": 500000,
+    "aiProcessedFiles": 75,
+    "aiProcessingFailed": 3,
+    "fileTypeDistribution": {
+      "pdf": 45,
+      "docx": 30,
+      "txt": 25,
+      "md": 20,
+      "other": 30
+    },
+    "tagCounts": {
+      "documentation": 60,
+      "project": 45,
+      "important": 30,
+      "requirements": 25
+    },
+    "aiGeneratedTags": {
+      "requirements": 20,
+      "e-commerce": 15,
+      "specification": 12,
+      "technical": 10
+    },
+    "recentActivity": {
+      "last7Days": 15,
+      "last30Days": 45
+    }
+  }
 }
 ```
 
@@ -585,6 +697,87 @@ const response = await fetch('/api/files/upload', {
     }
   ],
   "total_chunks": 10
+}
+```
+
+### Get File Details
+
+**Endpoint:** `GET /api/files/{file_id}`
+
+**Response:**
+```json
+{
+  "file": {
+    "id": "file-uuid",
+    "name": "document.pdf",
+    "description": "Project documentation",
+    "tags": ["documentation", "project", "important"],
+    "type": "pdf",
+    "size": 1024000,
+    "tokens": 5000,
+    "file_path": "/files/user-uuid/document.pdf",
+    "workspace_id": "workspace-uuid",
+    "uploaded_by": "user@example.com",
+    "uploaded_at": "2024-12-01T10:00:00Z",
+    "ai_processing_status": "completed",
+    "ai_generated_title": "E-commerce Platform Requirements",
+    "ai_generated_description": "Comprehensive requirements document...",
+    "ai_generated_tags": ["requirements", "e-commerce", "specification"],
+    "related_entity_id": "chat-uuid",
+    "related_entity_type": "chat",
+    "created_at": "2024-12-01T10:00:00Z"
+  }
+}
+```
+
+### Update File Metadata
+
+**Endpoint:** `PATCH /api/files/{file_id}`
+
+**Request:**
+```json
+{
+  "name": "Updated Document Name",
+  "description": "Updated description",
+  "tags": ["updated", "documentation", "project"],
+  "related_entity_id": "new-chat-uuid",
+  "related_entity_type": "chat"
+}
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "file": {
+    "id": "file-uuid",
+    "name": "Updated Document Name",
+    "description": "Updated description",
+    "tags": ["updated", "documentation", "project"],
+    "updated_at": "2024-12-01T11:00:00Z"
+  }
+}
+```
+
+### Download File
+
+**Endpoint:** `GET /api/files/{file_id}/download`
+
+**Response:** File binary data with appropriate headers
+
+### Re-run AI Processing
+
+**Endpoint:** `POST /api/files/{file_id}/reprocess`
+
+**Response:**
+```json
+{
+  "success": true,
+  "message": "AI processing restarted",
+  "file": {
+    "id": "file-uuid",
+    "ai_processing_status": "processing"
+  }
 }
 ```
 

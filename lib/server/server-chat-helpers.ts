@@ -18,8 +18,23 @@ export async function getServerProfile() {
     }
   )
 
+  // Add debugging for session
+  const sessionResult = await supabase.auth.getSession()
+  console.log("[getServerProfile] Session result:", {
+    hasSession: !!sessionResult.data.session,
+    sessionUser: sessionResult.data.session?.user?.id,
+    error: sessionResult.error
+  })
+
   const userResult = await supabase.auth.getUser()
   const user = userResult.data.user
+
+  console.log("[getServerProfile] User result:", {
+    hasUser: !!user,
+    userId: user?.id,
+    error: userResult.error
+  })
+
   if (!user) {
     console.log("[getServerProfile] No user found in session")
     throw new Error("User not found (no Supabase user in session)")

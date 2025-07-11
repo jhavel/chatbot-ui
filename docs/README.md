@@ -26,6 +26,7 @@ If you're new to the project, start here:
 ### 🚀 Deployment & Operations
 - **[Deployment Guide](DEPLOYMENT.md)** - Production deployment procedures
 - **[Troubleshooting](TROUBLESHOOTING.md)** - Common issues and solutions
+- **[File Deletion Fix](FILE_DELETION_FIX.md)** - Specific fix for file deletion issues
 
 ## 🎯 Documentation Goals
 
@@ -86,7 +87,8 @@ When contributing to the documentation:
 | [Development](DEVELOPMENT.md) | ✅ Complete | Dec 2024 | 2.0.0 |
 | [Components](COMPONENTS.md) | ✅ Complete | Dec 2024 | 2.0.0 |
 | [Deployment](DEPLOYMENT.md) | ✅ Complete | Dec 2024 | 2.0.0 |
-| [Troubleshooting](TROUBLESHOOTING.md) | ✅ Complete | Dec 2024 | 2.0.0 |
+| [Troubleshooting](TROUBLESHOOTING.md) | ✅ Complete | Jan 2025 | 2.0.0 |
+| [File Deletion Fix](FILE_DELETION_FIX.md) | ✅ Complete | Jan 2025 | 2.0.0 |
 
 ## 🆘 Getting Help
 

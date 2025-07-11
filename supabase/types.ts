@@ -7,6 +7,11 @@ export type Json =
   | Json[]
 
 export type Database = {
+  // Allows to automatically instanciate createClient with right options
+  // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
+  __InternalSupabase: {
+    PostgrestVersion: "12.2.3 (519615d)"
+  }
   public: {
     Tables: {
       assistant_collections: {
@@ -561,11 +566,17 @@ export type Database = {
           folder_id: string | null
           id: string
           name: string
+          related_entity_id: string | null
+          related_entity_type: string | null
           sharing: string
           size: number
+          tags: string[] | null
           tokens: number
           type: string
           updated_at: string | null
+          uploaded_at: string | null
+          uploaded_by: string | null
+          url: string | null
           user_id: string
         }
         Insert: {
@@ -575,11 +586,17 @@ export type Database = {
           folder_id?: string | null
           id?: string
           name: string
+          related_entity_id?: string | null
+          related_entity_type?: string | null
           sharing?: string
           size: number
+          tags?: string[] | null
           tokens: number
           type: string
           updated_at?: string | null
+          uploaded_at?: string | null
+          uploaded_by?: string | null
+          url?: string | null
           user_id: string
         }
         Update: {
@@ -589,11 +606,17 @@ export type Database = {
           folder_id?: string | null
           id?: string
           name?: string
+          related_entity_id?: string | null
+          related_entity_type?: string | null
           sharing?: string
           size?: number
+          tags?: string[] | null
           tokens?: number
           type?: string
           updated_at?: string | null
+          uploaded_at?: string | null
+          uploaded_by?: string | null
+          url?: string | null
           user_id?: string
         }
         Relationships: [
@@ -649,49 +672,94 @@ export type Database = {
       }
       memories: {
         Row: {
+          access_count: number | null
+          cluster_id: string | null
           content: string | null
           created_at: string | null
+          embedding: string | null
           id: string
-          user_id: string | null
-          embedding: number[] | null
-          cluster_id: string | null
-          relevance_score: number | null
-          access_count: number | null
-          last_accessed: string | null
-          semantic_tags: string[] | null
-          memory_type: string | null
           importance_score: number | null
+          last_accessed: string | null
+          memory_type: string | null
+          relevance_score: number | null
+          reviewed: boolean | null
+          reviewed_at: string | null
+          reviewed_by: string | null
+          semantic_tags: string[] | null
           updated_at: string | null
+          user_id: string | null
         }
         Insert: {
+          access_count?: number | null
+          cluster_id?: string | null
           content?: string | null
           created_at?: string | null
+          embedding?: string | null
           id?: string
-          user_id?: string | null
-          embedding?: number[] | null
-          cluster_id?: string | null
-          relevance_score?: number | null
-          access_count?: number | null
-          last_accessed?: string | null
-          semantic_tags?: string[] | null
-          memory_type?: string | null
           importance_score?: number | null
+          last_accessed?: string | null
+          memory_type?: string | null
+          relevance_score?: number | null
+          reviewed?: boolean | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          semantic_tags?: string[] | null
           updated_at?: string | null
+          user_id?: string | null
         }
         Update: {
+          access_count?: number | null
+          cluster_id?: string | null
           content?: string | null
           created_at?: string | null
+          embedding?: string | null
           id?: string
-          user_id?: string | null
-          embedding?: number[] | null
-          cluster_id?: string | null
-          relevance_score?: number | null
-          access_count?: number | null
-          last_accessed?: string | null
-          semantic_tags?: string[] | null
-          memory_type?: string | null
           importance_score?: number | null
+          last_accessed?: string | null
+          memory_type?: string | null
+          relevance_score?: number | null
+          reviewed?: boolean | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          semantic_tags?: string[] | null
           updated_at?: string | null
+          user_id?: string | null
+        }
+        Relationships: []
+      }
+      memory_clusters: {
+        Row: {
+          average_relevance_score: number | null
+          centroid_embedding: string | null
+          created_at: string
+          description: string | null
+          id: string
+          memory_count: number | null
+          name: string
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          average_relevance_score?: number | null
+          centroid_embedding?: string | null
+          created_at?: string
+          description?: string | null
+          id?: string
+          memory_count?: number | null
+          name: string
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          average_relevance_score?: number | null
+          centroid_embedding?: string | null
+          created_at?: string
+          description?: string | null
+          id?: string
+          memory_count?: number | null
+          name?: string
+          updated_at?: string | null
+          user_id?: string
         }
         Relationships: []
       }
@@ -1309,6 +1377,10 @@ export type Database = {
         Args: { old_chat_id: string; new_chat_id: string; new_user_id: string }
         Returns: undefined
       }
+      decay_memory_relevance: {
+        Args: Record<PropertyKey, never>
+        Returns: undefined
+      }
       delete_message_including_and_after: {
         Args: {
           p_user_id: string
@@ -1332,6 +1404,70 @@ export type Database = {
       delete_storage_object_from_bucket: {
         Args: { bucket_name: string; object_path: string }
         Returns: Record<string, unknown>
+      }
+      find_similar_clusters: {
+        Args: {
+          query_embedding: string
+          user_id_param: string
+          match_count?: number
+          similarity_threshold?: number
+        }
+        Returns: {
+          id: string
+          name: string
+          description: string
+          similarity: number
+        }[]
+      }
+      find_similar_memories: {
+        Args:
+          | {
+              query_embedding: string
+              user_id_param: string
+              limit_param?: number
+              similarity_threshold?: number
+            }
+          | {
+              query_embedding: string
+              user_id_param: string
+              match_count?: number
+              similarity_threshold?: number
+            }
+        Returns: {
+          id: string
+          content: string
+          similarity: number
+          relevance_score: number
+        }[]
+      }
+      get_file_stats: {
+        Args: { p_user_id: string }
+        Returns: {
+          total_files: number
+          total_size: number
+          total_tokens: number
+          file_types: Json
+          tag_counts: Json
+          recent_uploads: number
+        }[]
+      }
+      get_related_files: {
+        Args: { p_file_id: string; p_limit?: number }
+        Returns: {
+          id: string
+          name: string
+          description: string
+          type: string
+          similarity_score: number
+        }[]
+      }
+      mark_memories_reviewed: {
+        Args: { memory_ids: string[]; reviewer_id: string }
+        Returns: number
+      }
+      mark_memory_reviewed: {
+        Args: { memory_id: string; reviewer_id: string }
+        Returns: undefined
       }
       match_file_items_local: {
         Args: {
@@ -1373,6 +1509,44 @@ export type Database = {
         Args: { p_name: string }
         Returns: boolean
       }
+      search_files: {
+        Args: {
+          p_user_id: string
+          p_search_query?: string
+          p_tags?: string[]
+          p_file_types?: string[]
+          p_related_entity_id?: string
+          p_related_entity_type?: string
+          p_limit?: number
+          p_offset?: number
+          p_sort_by?: string
+          p_sort_order?: string
+        }
+        Returns: {
+          id: string
+          name: string
+          description: string
+          file_path: string
+          url: string
+          tags: string[]
+          type: string
+          size: number
+          tokens: number
+          uploaded_by: string
+          uploaded_at: string
+          related_entity_id: string
+          related_entity_type: string
+          created_at: string
+          updated_at: string
+          user_id: string
+          folder_id: string
+          sharing: string
+        }[]
+      }
+      update_memory_access: {
+        Args: { memory_id: string }
+        Returns: undefined
+      }
     }
     Enums: {
       [_ in never]: never
@@ -1383,21 +1557,25 @@ export type Database = {
   }
 }
 
-type DefaultSchema = Database[Extract<keyof Database, "public">]
+type DatabaseWithoutInternals = Omit<Database, "__InternalSupabase">
+
+type DefaultSchema = DatabaseWithoutInternals[Extract<keyof Database, "public">]
 
 export type Tables<
   DefaultSchemaTableNameOrOptions extends
     | keyof (DefaultSchema["Tables"] & DefaultSchema["Views"])
-    | { schema: keyof Database },
+    | { schema: keyof DatabaseWithoutInternals },
   TableName extends DefaultSchemaTableNameOrOptions extends {
-    schema: keyof Database
+    schema: keyof DatabaseWithoutInternals
   }
-    ? keyof (Database[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
-        Database[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
+    ? keyof (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
+        DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
     : never = never,
-> = DefaultSchemaTableNameOrOptions extends { schema: keyof Database }
-  ? (Database[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
-      Database[DefaultSchemaTableNameOrOptions["schema"]]["Views"])[TableName] extends {
+> = DefaultSchemaTableNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
+      DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])[TableName] extends {
       Row: infer R
     }
     ? R
@@ -1415,14 +1593,16 @@ export type Tables<
 export type TablesInsert<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
-    | { schema: keyof Database },
+    | { schema: keyof DatabaseWithoutInternals },
   TableName extends DefaultSchemaTableNameOrOptions extends {
-    schema: keyof Database
+    schema: keyof DatabaseWithoutInternals
   }
-    ? keyof Database[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
+    ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
     : never = never,
-> = DefaultSchemaTableNameOrOptions extends { schema: keyof Database }
-  ? Database[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
+> = DefaultSchemaTableNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
       Insert: infer I
     }
     ? I
@@ -1438,14 +1618,16 @@ export type TablesInsert<
 export type TablesUpdate<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
-    | { schema: keyof Database },
+    | { schema: keyof DatabaseWithoutInternals },
   TableName extends DefaultSchemaTableNameOrOptions extends {
-    schema: keyof Database
+    schema: keyof DatabaseWithoutInternals
   }
-    ? keyof Database[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
+    ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
     : never = never,
-> = DefaultSchemaTableNameOrOptions extends { schema: keyof Database }
-  ? Database[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
+> = DefaultSchemaTableNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
       Update: infer U
     }
     ? U
@@ -1461,14 +1643,16 @@ export type TablesUpdate<
 export type Enums<
   DefaultSchemaEnumNameOrOptions extends
     | keyof DefaultSchema["Enums"]
-    | { schema: keyof Database },
+    | { schema: keyof DatabaseWithoutInternals },
   EnumName extends DefaultSchemaEnumNameOrOptions extends {
-    schema: keyof Database
+    schema: keyof DatabaseWithoutInternals
   }
-    ? keyof Database[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
+    ? keyof DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
     : never = never,
-> = DefaultSchemaEnumNameOrOptions extends { schema: keyof Database }
-  ? Database[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"][EnumName]
+> = DefaultSchemaEnumNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"][EnumName]
   : DefaultSchemaEnumNameOrOptions extends keyof DefaultSchema["Enums"]
     ? DefaultSchema["Enums"][DefaultSchemaEnumNameOrOptions]
     : never
@@ -1476,14 +1660,16 @@ export type Enums<
 export type CompositeTypes<
   PublicCompositeTypeNameOrOptions extends
     | keyof DefaultSchema["CompositeTypes"]
-    | { schema: keyof Database },
+    | { schema: keyof DatabaseWithoutInternals },
   CompositeTypeName extends PublicCompositeTypeNameOrOptions extends {
-    schema: keyof Database
+    schema: keyof DatabaseWithoutInternals
   }
-    ? keyof Database[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
+    ? keyof DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
     : never = never,
-> = PublicCompositeTypeNameOrOptions extends { schema: keyof Database }
-  ? Database[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"][CompositeTypeName]
+> = PublicCompositeTypeNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"][CompositeTypeName]
   : PublicCompositeTypeNameOrOptions extends keyof DefaultSchema["CompositeTypes"]
     ? DefaultSchema["CompositeTypes"][PublicCompositeTypeNameOrOptions]
     : never
