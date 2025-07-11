@@ -28,7 +28,13 @@
     "setup-memory-cloud": "node scripts/run-memory-migration-cloud.js",
     "validate-env": "node scripts/validate-env.js",
     "health-check": "curl -f http://localhost:3000/api/health || echo 'Health check failed'",
-    "test": "jest"
+    "test": "jest",
+    "test:status": "jest __tests__/system-status.test.ts --testTimeout=30000",
+    "test:memory": "jest __tests__/memory-integration.test.ts --testTimeout=30000",
+    "test:all": "jest --testTimeout=30000",
+    "status": "node scripts/check-status.js",
+    "status:check": "npm run status",
+    "test:status-script": "node scripts/test-status.js"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.18.0",
