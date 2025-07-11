@@ -1,3 +1,5 @@
+"use server"
+
 console.log("🔥 OpenAI route hit")
 
 import { checkApiKey, getServerProfile } from "@/lib/server/server-chat-helpers"

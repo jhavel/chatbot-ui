@@ -1,3 +1,5 @@
+"use server"
+
 import { ChatSettings } from "@/types"
 import { createAdminClient } from "@/lib/supabase/admin"
 import { OpenAIStream, StreamingTextResponse } from "ai"
