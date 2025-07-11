@@ -18,15 +18,13 @@ BEGIN
   -- Get the project URL from environment variable
   project_url := current_setting('app.supabase_url', true);
   IF project_url IS NULL THEN
-    -- Fallback to the original URL if environment variable is not set
-    project_url := 'https://mronjhmefodcxkoneyti.supabase.co';
+    RAISE EXCEPTION 'Supabase URL not configured. Please set app.supabase_url configuration.';
   END IF;
   
   -- Get the service role key from environment variable
   service_role_key := current_setting('app.supabase_service_role_key', true);
   IF service_role_key IS NULL THEN
-    -- Fallback to the original key if environment variable is not set
-    service_role_key := 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1yb25qaG1lZm9kY3hrb25leXRpIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc0ODMwNTQxNywiZXhwIjoyMDYzODgxNDE3fQ.1HSSsZssgkqz4VsLo3Mr-mkULAsHx7qCc-RV0XggysY';
+    RAISE EXCEPTION 'Supabase service role key not configured. Please set app.supabase_service_role_key configuration.';
   END IF;
   
   url := project_url || '/storage/v1/object/' || bucket || '/' || object;

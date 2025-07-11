@@ -399,7 +399,7 @@ export const deleteChatFiles = async (fileId: string) => {
 export const deleteFileWorkspace = async (
   fileId: string,
   workspaceId: string
-) => {
+): Promise<boolean> => {
   const { error } = await supabase
     .from("file_workspaces")
     .delete()
@@ -407,6 +407,8 @@ export const deleteFileWorkspace = async (
     .eq("workspace_id", workspaceId)
 
   if (error) throw new Error(error.message)
+
+  return true
 }
 
 // Enhanced file operations for the new features

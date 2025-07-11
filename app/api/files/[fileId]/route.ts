@@ -173,6 +173,24 @@ export async function DELETE(
       }
     }
 
+    // Set up the Supabase service role key configuration for the storage deletion function
+    console.log(`[DELETE] Setting up Supabase configuration`)
+    const { error: configError } = await supabase.rpc(
+      "set_supabase_service_role_key",
+      {
+        service_key: process.env.SUPABASE_SERVICE_ROLE_KEY
+      }
+    )
+
+    if (configError) {
+      console.warn(
+        `[DELETE] Could not set service role key configuration:`,
+        configError
+      )
+    } else {
+      console.log(`[DELETE] Supabase configuration set successfully`)
+    }
+
     // Since the trigger is blocking all deletion attempts, let's try a different approach
     // We'll mark the file as deleted by updating it with a special status or move it to a different table
     console.log(

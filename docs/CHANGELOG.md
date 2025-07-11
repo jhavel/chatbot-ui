@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+- **Fixed Exposed Supabase Service Key**
+  - Removed hardcoded Supabase service key from migration files
+  - Implemented secure environment variable-based configuration
+  - Added runtime configuration setup for storage deletion functions
+  - Created secure configuration function with proper access controls
+  - Updated file deletion API to use secure configuration approach
+  - Added comprehensive security documentation
+
 ### Fixed
 - **File Deletion System**
   - Fixed file deletion failures caused by database trigger using hardcoded local Supabase credentials
