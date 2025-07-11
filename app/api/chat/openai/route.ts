@@ -262,7 +262,7 @@ export async function POST(request: Request) {
             const { done, value } = await reader.read()
             if (done) break
 
-            const chunk = new TextDecoder().decode(value)
+            const chunk = new TextDecoder().decode(value, { stream: true })
             const lines = chunk.split("\n")
 
             for (const line of lines) {

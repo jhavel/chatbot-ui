@@ -394,182 +394,163 @@ export const processResponse = async (
   }
 
   const reader = response.body.getReader()
+  // Use stream option for proper multi-byte character handling
   const decoder = new TextDecoder("utf-8")
   let done = false
   let buffer = ""
 
-  // Log the first chunk
-  const firstRead = await reader.read()
-  console.log("[processResponse] First chunk from stream:", firstRead)
-  if (firstRead.value) {
-    const firstDecoded = decoder.decode(firstRead.value)
-    console.log("[processResponse] First decoded buffer:", firstDecoded)
-    buffer += firstDecoded
-    let lines = buffer.split("\n")
-    buffer = lines.pop() || ""
-    for (const line of lines) {
-      if (!line.startsWith("data: ")) continue
-      const messageData = line.replace(/^data: /, "")
-      if (messageData === "[DONE]") continue
-      try {
-        const parsed = JSON.parse(messageData)
-        const content = parsed.choices?.[0]?.delta?.content
-        if (content) {
-          fullText += content
-          setFirstTokenReceived(true)
-          setToolInUse("none")
-          setChatMessages(prev => {
-            console.log("[processResponse] setChatMessages updater called")
-            let newFullText = ""
-            const updated = prev.map((chatMessage, idx, arr) => {
-              const isLastTempAssistant =
-                chatMessage.message.role === "assistant" &&
-                typeof chatMessage.message.id === "string" &&
-                chatMessage.message.id.startsWith("temp-") &&
-                idx ===
-                  arr.map(m => m.message.id).lastIndexOf(chatMessage.message.id)
-              if (isLastTempAssistant) {
-                newFullText = (chatMessage.message.content || "") + content
-                const newMsg = {
-                  ...chatMessage,
-                  message: {
-                    ...chatMessage.message,
-                    content: newFullText
-                  }
-                }
-                return newMsg
-              }
-              return chatMessage
-            })
-            // Debug log
-            console.log("[processResponse] setChatMessages prev:", prev)
-            console.log("[processResponse] setChatMessages updated:", updated)
-            console.log(
-              "[processResponse] Updating temp assistant message with content:",
-              newFullText
-            )
-            return [...updated]
-          })
+  try {
+    while (!done) {
+      const { value, done: doneReading } = await reader.read()
+      console.log("[processResponse] Streaming chunk:", {
+        value: value ? value.length : 0,
+        done: doneReading
+      })
+
+      done = doneReading
+
+      if (value) {
+        // Decode the chunk with stream option for proper multi-byte handling
+        const decoded = decoder.decode(value, { stream: !done })
+        console.log("[processResponse] Decoded chunk:", decoded)
+
+        // Validate the decoded text
+        if (typeof decoded === "string" && decoded.length > 0) {
+          buffer += decoded
+        } else {
+          console.warn("[processResponse] Invalid decoded chunk:", decoded)
         }
-      } catch (err) {
-        console.error("Streaming parse error:", err, messageData)
+      }
+
+      // Process complete lines from the buffer
+      let lines = buffer.split("\n")
+      // Keep the last line in buffer if it's incomplete
+      buffer = lines.pop() || ""
+
+      for (const line of lines) {
+        if (!line.startsWith("data: ")) continue
+        const messageData = line.replace(/^data: /, "")
+        if (messageData === "[DONE]") continue
+
+        try {
+          const parsed = JSON.parse(messageData)
+          const content = parsed.choices?.[0]?.delta?.content
+          if (content && typeof content === "string") {
+            fullText += content
+            setFirstTokenReceived(true)
+            setToolInUse("none")
+            setChatMessages(prev => {
+              console.log("[processResponse] setChatMessages updater called")
+              let newFullText = ""
+              const updated = prev.map((chatMessage, idx, arr) => {
+                const isLastTempAssistant =
+                  chatMessage.message.role === "assistant" &&
+                  typeof chatMessage.message.id === "string" &&
+                  chatMessage.message.id.startsWith("temp-") &&
+                  idx ===
+                    arr
+                      .map(m => m.message.id)
+                      .lastIndexOf(chatMessage.message.id)
+                if (isLastTempAssistant) {
+                  newFullText = (chatMessage.message.content || "") + content
+                  const newMsg = {
+                    ...chatMessage,
+                    message: {
+                      ...chatMessage.message,
+                      content: newFullText
+                    }
+                  }
+                  return newMsg
+                }
+                return chatMessage
+              })
+              // Debug log
+              console.log("[processResponse] setChatMessages prev:", prev)
+              console.log("[processResponse] setChatMessages updated:", updated)
+              console.log(
+                "[processResponse] Updating temp assistant message with content:",
+                newFullText
+              )
+              return [...updated]
+            })
+          }
+        } catch (err) {
+          console.error("Streaming parse error:", err, messageData)
+        }
       }
     }
-  }
-  done = firstRead.done
 
-  while (!done) {
-    const { value, done: doneReading } = await reader.read()
-    console.log("[processResponse] Streaming loop chunk:", {
-      value,
-      done: doneReading
-    })
-    const decoded = value ? decoder.decode(value) : ""
-    console.log("[processResponse] Decoded chunk:", decoded)
-    done = doneReading
-    buffer += decoded
+    // Handle any remaining buffer after the stream ends
+    if (buffer.trim()) {
+      // Final decode to flush any remaining bytes
+      const finalDecoded = decoder.decode()
+      if (finalDecoded) {
+        buffer += finalDecoded
+      }
 
-    let lines = buffer.split("\n")
-    buffer = lines.pop() || "" // Save incomplete line for next chunk
-
-    for (const line of lines) {
-      if (!line.startsWith("data: ")) continue
-      const messageData = line.replace(/^data: /, "")
-      if (messageData === "[DONE]") continue
-      try {
-        const parsed = JSON.parse(messageData)
-        const content = parsed.choices?.[0]?.delta?.content
-        if (content) {
-          fullText += content
-          setFirstTokenReceived(true)
-          setToolInUse("none")
-          setChatMessages(prev => {
-            console.log("[processResponse] setChatMessages updater called")
-            let newFullText = ""
-            const updated = prev.map((chatMessage, idx, arr) => {
-              const isLastTempAssistant =
-                chatMessage.message.role === "assistant" &&
-                typeof chatMessage.message.id === "string" &&
-                chatMessage.message.id.startsWith("temp-") &&
-                idx ===
-                  arr.map(m => m.message.id).lastIndexOf(chatMessage.message.id)
-              if (isLastTempAssistant) {
-                newFullText = (chatMessage.message.content || "") + content
-                const newMsg = {
-                  ...chatMessage,
-                  message: {
-                    ...chatMessage.message,
-                    content: newFullText
+      if (buffer.startsWith("data: ")) {
+        const messageData = buffer.replace(/^data: /, "")
+        if (messageData !== "[DONE]") {
+          try {
+            const parsed = JSON.parse(messageData)
+            const content = parsed.choices?.[0]?.delta?.content
+            if (content && typeof content === "string") {
+              fullText += content
+              setFirstTokenReceived(true)
+              setToolInUse("none")
+              setChatMessages(prev => {
+                console.log("[processResponse] setChatMessages updater called")
+                let newFullText = ""
+                const updated = prev.map((chatMessage, idx, arr) => {
+                  const isLastTempAssistant =
+                    chatMessage.message.role === "assistant" &&
+                    typeof chatMessage.message.id === "string" &&
+                    chatMessage.message.id.startsWith("temp-") &&
+                    idx ===
+                      arr
+                        .map(m => m.message.id)
+                        .lastIndexOf(chatMessage.message.id)
+                  if (isLastTempAssistant) {
+                    newFullText = (chatMessage.message.content || "") + content
+                    const newMsg = {
+                      ...chatMessage,
+                      message: {
+                        ...chatMessage.message,
+                        content: newFullText
+                      }
+                    }
+                    return newMsg
                   }
-                }
-                return newMsg
-              }
-              return chatMessage
-            })
-            // Debug log
-            console.log("[processResponse] setChatMessages prev:", prev)
-            console.log("[processResponse] setChatMessages updated:", updated)
-            console.log(
-              "[processResponse] Updating temp assistant message with content:",
-              newFullText
+                  return chatMessage
+                })
+                // Debug log
+                console.log("[processResponse] setChatMessages prev:", prev)
+                console.log(
+                  "[processResponse] setChatMessages updated:",
+                  updated
+                )
+                console.log(
+                  "[processResponse] Updating temp assistant message with content:",
+                  newFullText
+                )
+                return [...updated]
+              })
+            }
+          } catch (err) {
+            console.error(
+              "Streaming parse error (final buffer):",
+              err,
+              messageData
             )
-            return [...updated]
-          })
+          }
         }
-      } catch (err) {
-        console.error("Streaming parse error:", err, messageData)
       }
     }
-  }
-
-  // Handle any remaining buffer after the stream ends
-  if (buffer.trim() && buffer.startsWith("data: ")) {
-    const messageData = buffer.replace(/^data: /, "")
-    if (messageData !== "[DONE]") {
-      try {
-        const parsed = JSON.parse(messageData)
-        const content = parsed.choices?.[0]?.delta?.content
-        if (content) {
-          fullText += content
-          setFirstTokenReceived(true)
-          setToolInUse("none")
-          setChatMessages(prev => {
-            console.log("[processResponse] setChatMessages updater called")
-            let newFullText = ""
-            const updated = prev.map((chatMessage, idx, arr) => {
-              const isLastTempAssistant =
-                chatMessage.message.role === "assistant" &&
-                typeof chatMessage.message.id === "string" &&
-                chatMessage.message.id.startsWith("temp-") &&
-                idx ===
-                  arr.map(m => m.message.id).lastIndexOf(chatMessage.message.id)
-              if (isLastTempAssistant) {
-                newFullText = (chatMessage.message.content || "") + content
-                const newMsg = {
-                  ...chatMessage,
-                  message: {
-                    ...chatMessage.message,
-                    content: newFullText
-                  }
-                }
-                return newMsg
-              }
-              return chatMessage
-            })
-            // Debug log
-            console.log("[processResponse] setChatMessages prev:", prev)
-            console.log("[processResponse] setChatMessages updated:", updated)
-            console.log(
-              "[processResponse] Updating temp assistant message with content:",
-              newFullText
-            )
-            return [...updated]
-          })
-        }
-      } catch (err) {
-        console.error("Streaming parse error (final buffer):", err, messageData)
-      }
-    }
+  } catch (error) {
+    console.error("[processResponse] Error during streaming:", error)
+    throw error
+  } finally {
+    reader.releaseLock()
   }
 
   console.log("[processResponse] Final fullText:", fullText)
