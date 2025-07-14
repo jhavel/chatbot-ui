@@ -34,7 +34,9 @@
     "test:all": "jest --testTimeout=30000",
     "status": "node scripts/check-status.js",
     "status:check": "npm run status",
-    "test:status-script": "node scripts/test-status.js"
+    "test:status-script": "node scripts/test-status.js",
+    "cleanup:status-files": "node scripts/cleanup-status-test-files.js",
+    "test:status-improvements": "node scripts/test-status-improvements.js"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.18.0",
