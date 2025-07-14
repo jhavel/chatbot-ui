@@ -25,6 +25,82 @@ try {
 // Re-export types for convenience
 export type { Memory, MemoryCluster, SimilarMemory }
 
+// Improved session management with TTL and cleanup
+class SessionManager {
+  private sessions = new Map<
+    string,
+    { content: Set<string>; timestamp: number }
+  >()
+  private readonly TTL = 30 * 60 * 1000 // 30 minutes
+  private cleanupInterval: NodeJS.Timeout | null = null
+
+  constructor() {
+    // Start cleanup interval
+    this.startCleanup()
+  }
+
+  private startCleanup() {
+    if (this.cleanupInterval) return
+
+    this.cleanupInterval = setInterval(
+      () => {
+        this.cleanup()
+      },
+      5 * 60 * 1000
+    ) // Clean up every 5 minutes
+  }
+
+  private cleanup() {
+    const now = Date.now()
+    for (const [userId, session] of this.sessions.entries()) {
+      if (now - session.timestamp > this.TTL) {
+        this.sessions.delete(userId)
+        console.log(`🧹 Cleaned up session for user: ${userId}`)
+      }
+    }
+  }
+
+  hasProcessed(userId: string, content: string): boolean {
+    const session = this.sessions.get(userId)
+    if (!session) return false
+
+    // Update timestamp on access
+    session.timestamp = Date.now()
+    return session.content.has(this.normalizeContent(content))
+  }
+
+  markProcessed(userId: string, content: string): void {
+    const normalized = this.normalizeContent(content)
+
+    if (!this.sessions.has(userId)) {
+      this.sessions.set(userId, { content: new Set(), timestamp: Date.now() })
+    }
+
+    const session = this.sessions.get(userId)!
+    session.content.add(normalized)
+    session.timestamp = Date.now()
+  }
+
+  private normalizeContent(content: string): string {
+    return content.trim().toLowerCase().replace(/\s+/g, " ")
+  }
+
+  getSessionStats(): { totalSessions: number; totalContent: number } {
+    let totalContent = 0
+    for (const session of this.sessions.values()) {
+      totalContent += session.content.size
+    }
+
+    return {
+      totalSessions: this.sessions.size,
+      totalContent
+    }
+  }
+}
+
+// Global session manager instance
+const sessionManager = new SessionManager()
+
 // Generate embedding for text content
 export const generateEmbedding = async (text: string): Promise<number[]> => {
   try {
@@ -159,39 +235,99 @@ export const calculateImportanceScore = (
   return Math.min(score, 1.0)
 }
 
-// Simple in-memory cache to prevent duplicate processing in the same session
-const processedContentCache = new Map<string, Set<string>>()
+// Enhanced memory quality scoring
+const calculateMemoryQuality = (
+  content: string,
+  context: string = ""
+): number => {
+  let score = 0
 
-// Save enhanced memory with semantic analysis and clustering
+  // Personal information (high value)
+  if (
+    /my name is|i am|i'm|i work as|my job is|i live in|i'm from/i.test(content)
+  ) {
+    score += 0.4
+  }
+
+  // Preferences and opinions (medium value)
+  if (
+    /i like|i prefer|i love|i hate|i enjoy|my favorite|i'm interested in/i.test(
+      content
+    )
+  ) {
+    score += 0.3
+  }
+
+  // Project and technical information (medium value)
+  if (
+    /project|goal|objective|deadline|timeline|mileline|i'm working on|i'm building/i.test(
+      content
+    )
+  ) {
+    score += 0.3
+  }
+
+  // Question detection (negative value)
+  if (
+    /^(what|how|when|where|why|who|which|do you|can you|could you|would you|are you|is this|does this)/i.test(
+      content.trim()
+    )
+  ) {
+    score -= 0.5
+  }
+
+  // Length consideration
+  const wordCount = content.split(/\s+/).length
+  if (wordCount < 3) score -= 0.3
+  if (wordCount > 100) score += 0.1
+
+  // Context relevance
+  if (context && content.toLowerCase().includes(context.toLowerCase())) {
+    score += 0.2
+  }
+
+  return Math.max(0, Math.min(1, score))
+}
+
+// Save enhanced memory with improved efficiency
 export const saveEnhancedMemory = async (
   supabase: any,
   content: string,
-  user_id: string
+  user_id: string,
+  context: string = ""
 ): Promise<Memory> => {
   try {
+    // Early validation
     if (!validateMemoryContent(content)) {
       console.warn("❌ Memory content validation failed - skipping save")
       throw new Error("Memory content validation failed")
     }
 
-    // Check if this exact content was already processed for this user in this session
-    const contentHash = content.trim().toLowerCase()
-    const userCache = processedContentCache.get(user_id) || new Set()
-    if (userCache.has(contentHash)) {
+    // Check session cache first (most efficient)
+    if (sessionManager.hasProcessed(user_id, content)) {
       console.log(
         `⏭️ Content already processed in this session: ${content.substring(0, 50)}...`
       )
       throw new Error("Content already processed in this session")
     }
-    userCache.add(contentHash)
-    processedContentCache.set(user_id, userCache)
 
-    console.log(`🧠 Memory save attempt: ${content.substring(0, 50)}...`)
+    // Calculate memory quality before expensive operations
+    const qualityScore = calculateMemoryQuality(content, context)
+    if (qualityScore < 0.2) {
+      console.log(
+        `📉 Low quality content rejected (score: ${qualityScore.toFixed(2)}): ${content.substring(0, 50)}...`
+      )
+      throw new Error("Content quality too low")
+    }
+
+    console.log(
+      `🧠 Memory save attempt: ${content.substring(0, 50)}... (quality: ${qualityScore.toFixed(2)})`
+    )
     console.log(`👤 User: ${user_id}`)
 
-    // Check for duplicates first
+    // Check for duplicates (expensive operation, but necessary)
     const { checkForDuplicates } = await import("./memory-deduplication")
-    const isDuplicate = await checkForDuplicates(content, user_id, 0.98)
+    const isDuplicate = await checkForDuplicates(content, user_id, 0.95) // Slightly lower threshold
 
     if (isDuplicate) {
       console.log(
@@ -202,6 +338,9 @@ export const saveEnhancedMemory = async (
 
     console.log(`✅ No duplicates found - proceeding with save`)
 
+    // Mark as processed in session cache
+    sessionManager.markProcessed(user_id, content)
+
     // Generate embedding
     const embedding = await generateEmbedding(content)
 
@@ -211,8 +350,9 @@ export const saveEnhancedMemory = async (
     // Determine memory type
     const memoryType = determineMemoryType(content)
 
-    // Calculate importance score
-    const importanceScore = calculateImportanceScore(content, memoryType)
+    // Calculate importance score with quality consideration
+    const baseImportance = calculateImportanceScore(content, memoryType)
+    const importanceScore = Math.min(1.0, baseImportance * qualityScore)
 
     // Try to find or create cluster
     const clusterId = await findOrCreateCluster(
@@ -234,8 +374,8 @@ export const saveEnhancedMemory = async (
           semantic_tags: semanticTags,
           memory_type: memoryType,
           importance_score: importanceScore,
-          relevance_score: 1.0,
-          cluster_id: clusterId // This can be null if cluster creation failed
+          relevance_score: qualityScore, // Use quality score as initial relevance
+          cluster_id: clusterId
         }
       ])
       .select()
@@ -248,7 +388,7 @@ export const saveEnhancedMemory = async (
 
     console.log(`✅ Memory saved successfully: ${data.id}`)
     console.log(
-      `📊 Memory details: type=${memoryType}, importance=${importanceScore}, tags=${semanticTags.join(", ")}`
+      `📊 Memory details: type=${memoryType}, importance=${importanceScore.toFixed(2)}, quality=${qualityScore.toFixed(2)}, tags=${semanticTags.join(", ")}`
     )
 
     return data

@@ -1,33 +1,19 @@
 console.log("🔥 OpenAI route hit")
 
-import { checkApiKey, getServerProfile } from "@/lib/server/server-chat-helpers"
-import { ChatSettings } from "@/types"
-import { ServerRuntime } from "next"
-import OpenAI from "openai"
-import { ChatCompletionCreateParamsBase } from "openai/resources/chat/completions.mjs"
-import { getContextualMemories } from "@/db/memories"
-import { fileTools } from "@/lib/tools/fileTools"
-import { OpenAIStream, StreamingTextResponse } from "ai"
-import { intelligentMemorySystem } from "@/lib/intelligent-memory-system"
+import { NextRequest } from "next/server"
 import { createRouteHandlerClient } from "@supabase/auth-helpers-nextjs"
 import { cookies } from "next/headers"
+import { StreamingTextResponse } from "ai"
+import { ChatSettings } from "@/types"
+import { getServerProfile } from "@/lib/server/server-chat-helpers"
+import { checkApiKey } from "@/lib/server/server-chat-helpers"
+import { fileTools } from "@/lib/tools/fileTools"
+import { getOptimizedContext } from "@/lib/server/server-chat-helpers"
+import { getContextualMemories } from "@/lib/server/server-chat-helpers"
+import { intelligentMemorySystem } from "@/lib/intelligent-memory-system"
+import { ChatCompletionCreateParamsBase } from "openai/resources/chat/completions.mjs"
 
-export const runtime: ServerRuntime = "edge"
-
-// Optimized context extraction - only extract meaningful context
-const getOptimizedContext = (messages: any[]): string => {
-  // Only use the last 2 messages for context to reduce processing
-  const recentMessages = messages.slice(-2)
-
-  return recentMessages
-    .map(msg => {
-      const content = msg.content || ""
-      // Limit context length to prevent excessive processing
-      return content.length > 200 ? content.substring(0, 200) + "..." : content
-    })
-    .join(" ")
-    .trim()
-}
+export const runtime = "edge"
 
 export async function POST(request: Request) {
   const json = await request.json()
@@ -52,7 +38,7 @@ export async function POST(request: Request) {
       currentContext.substring(0, 100) + "..."
     )
 
-    // INTELLIGENT MEMORY PROCESSING - NEW EFFICIENT SYSTEM
+    // INTELLIGENT MEMORY PROCESSING - IMPROVED EFFICIENT SYSTEM
     const startTime = Date.now()
     const memoryResult = await intelligentMemorySystem.handleConversation(
       messages,
@@ -67,7 +53,7 @@ export async function POST(request: Request) {
       processingTime: `${processingTime}ms`
     })
 
-    // ADDITIONAL MEMORY EXTRACTION - ENHANCED CAPTURE
+    // ADDITIONAL MEMORY EXTRACTION - ENHANCED CAPTURE WITH CONTEXT
     if (memoryResult.shouldProcess) {
       try {
         const { extractMemoriesWithConfidence, saveExtractedMemories } =
@@ -141,51 +127,31 @@ export async function POST(request: Request) {
             `  ${index + 1}. [${memory.similarity?.toFixed(3)}] ${memory.content.substring(0, 100)}...`
           )
         })
-      }
 
-      // Create memory context only if we have relevant memories
-      if (relevantMemories.length > 0) {
+        // Prepare memory context with improved formatting
         const memoryContext = relevantMemories
-          .map((memory, index) => `${index + 1}. ${memory.content}`)
+          .map((memory: any, index: number) => {
+            const relevance = memory.similarity
+              ? `(relevance: ${memory.similarity.toFixed(2)})`
+              : ""
+            return `${index + 1}. ${memory.content} ${relevance}`
+          })
           .join("\n")
-
-        // Check if this is a question about the user
-        const isQuestionAboutUser =
-          currentContext.toLowerCase().includes("what") ||
-          currentContext.toLowerCase().includes("how many") ||
-          currentContext.toLowerCase().includes("who") ||
-          currentContext.toLowerCase().includes("when") ||
-          currentContext.toLowerCase().includes("where")
-
-        const systemPrompt = chatSettings.model?.includes("gpt-4o")
-          ? `You have access to the following relevant memories about the user:\n\n${memoryContext}\n\nIMPORTANT: Use these memories to provide personalized and contextual responses. If the user asks about something mentioned in these memories, reference the specific memory. If you don't have relevant information in these memories, say so clearly.`
-          : `IMPORTANT: Use these user memories to personalize your response:\n\n${memoryContext}\n\nReference specific memories when responding. If the user asks about something not in these memories, say you don't have that information.`
 
         memoryMessages = [
           {
             role: "system",
-            content: systemPrompt
+            content: `You have access to the following relevant memories from previous conversations:\n\n${memoryContext}\n\nUse this information to provide more personalized and contextual responses. If a memory is not relevant to the current conversation, you don't need to reference it.`
           }
         ]
+
+        console.log(
+          "🧠 Memory context prepared:",
+          memoryMessages.length,
+          "messages"
+        )
       }
     }
-
-    // If no memories found, use a simple prompt
-    if (memoryMessages.length === 0) {
-      memoryMessages = [
-        {
-          role: "system",
-          content:
-            "You are a helpful AI assistant. Provide clear, accurate, and helpful responses."
-        }
-      ]
-    }
-
-    console.log(
-      "🧠 Memory context prepared:",
-      memoryMessages.length,
-      "messages"
-    )
   } catch (e) {
     console.error("Error in intelligent memory processing:", e)
     // Fallback to simple system message
@@ -248,81 +214,59 @@ export async function POST(request: Request) {
       return new StreamingTextResponse(stream)
     }
 
-    // Create a stream of the response
-    const encoder = new TextEncoder()
+    // Create a streaming response
     const stream = new ReadableStream({
       async start(controller) {
-        try {
-          const reader = response.body?.getReader()
-          if (!reader) {
-            throw new Error("No response body")
-          }
+        const encoder = new TextEncoder()
+        const reader = response.body?.getReader()
+        const decoder = new TextDecoder()
 
+        if (!reader) {
+          controller.close()
+          return
+        }
+
+        try {
           while (true) {
             const { done, value } = await reader.read()
             if (done) break
 
-            const chunk = new TextDecoder().decode(value, { stream: true })
+            const chunk = decoder.decode(value)
             const lines = chunk.split("\n")
 
             for (const line of lines) {
-              if (line.startsWith("data: ")) {
-                const data = line.slice(6)
-                if (data === "[DONE]") {
-                  controller.enqueue(encoder.encode(`data: [DONE]\n\n`))
-                  break
+              if (!line.startsWith("data: ")) continue
+              const messageData = line.replace(/^data: /, "")
+              if (messageData === "[DONE]") continue
+
+              try {
+                const parsed = JSON.parse(messageData)
+                const content = parsed.choices?.[0]?.delta?.content
+                if (content && typeof content === "string") {
+                  const data = `data: ${JSON.stringify({ choices: [{ delta: { content } }] })}\n`
+                  controller.enqueue(encoder.encode(data))
                 }
-                try {
-                  const parsed = JSON.parse(data)
-                  if (parsed.choices?.[0]?.delta?.content) {
-                    controller.enqueue(
-                      encoder.encode(`data: ${JSON.stringify(parsed)}\n\n`)
-                    )
-                  }
-                } catch (e) {
-                  console.error("Error parsing chunk:", e)
-                }
+              } catch (err) {
+                console.error("Error parsing chunk:", err, messageData)
               }
             }
           }
         } catch (error) {
-          console.error("Streaming error:", error)
-          controller.enqueue(
-            encoder.encode(
-              `data: ${JSON.stringify({
-                choices: [
-                  {
-                    delta: {
-                      content:
-                        "Sorry, I encountered an error. Please try again."
-                    }
-                  }
-                ]
-              })}\n\n`
-            )
-          )
+          console.error("Error reading stream:", error)
         } finally {
+          reader.releaseLock()
           controller.close()
         }
       }
     })
 
-    // Return a StreamingTextResponse, which can be consumed by the client
     return new StreamingTextResponse(stream)
   } catch (error) {
     console.error("Error in OpenAI API call:", error)
     const encoder = new TextEncoder()
     const stream = new ReadableStream({
       start(controller) {
-        const errorData = `data: ${JSON.stringify({
-          choices: [
-            {
-              delta: {
-                content: "Sorry, I encountered an error. Please try again."
-              }
-            }
-          ]
-        })}\n`
+        const errorData = `data: ${JSON.stringify({ choices: [{ delta: { content: "Sorry, I encountered an error. Please try again." } }] })}\n`
         controller.enqueue(encoder.encode(errorData))
         controller.close()
       }

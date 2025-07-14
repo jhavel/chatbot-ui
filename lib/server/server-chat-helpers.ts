@@ -2,6 +2,7 @@ import { Database, Tables } from "@/supabase/types"
 import { VALID_ENV_KEYS } from "@/types/valid-keys"
 import { createServerClient } from "@supabase/ssr"
 import { cookies } from "next/headers"
+import { getRelevantMemories } from "@/lib/memory-system"
 
 export async function getServerProfile() {
   const cookieStore = cookies()
@@ -115,5 +116,54 @@ function addApiKeysToProfile(profile: Tables<"profiles">) {
 export function checkApiKey(apiKey: string | null, keyName: string) {
   if (apiKey === null || apiKey === "") {
     throw new Error(`${keyName} API Key not found`)
+  }
+}
+
+// Optimized context extraction - only extract meaningful context
+export const getOptimizedContext = (messages: any[]): string => {
+  // Only use the last 2 messages for context to reduce processing
+  const recentMessages = messages.slice(-2)
+
+  return recentMessages
+    .map(msg => {
+      const content = msg.content || ""
+      // Limit context length to prevent excessive processing
+      return content.length > 200 ? content.substring(0, 200) + "..." : content
+    })
+    .join(" ")
+    .trim()
+}
+
+// Get contextual memories for a user
+export const getContextualMemories = async (
+  user_id: string,
+  context: string,
+  limit: number = 5,
+  similarityThreshold: number = 0.6
+) => {
+  try {
+    const cookieStore = cookies()
+    const supabase = createServerClient<Database>(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      {
+        cookies: {
+          get(name: string) {
+            return cookieStore.get(name)?.value
+          }
+        }
+      }
+    )
+
+    return await getRelevantMemories(
+      supabase,
+      user_id,
+      context,
+      limit,
+      similarityThreshold
+    )
+  } catch (error) {
+    console.error("Error getting contextual memories:", error)
+    return []
   }
 }

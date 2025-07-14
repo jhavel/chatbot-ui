@@ -60,113 +60,237 @@ export const INTELLIGENT_MEMORY_CONFIG = {
   // Performance optimizations
   enableLazyProcessing: true,
   enableBackgroundSummarization: true,
-  enableSmartDeduplication: true
+  enableSmartDeduplication: true,
+
+  // Quality thresholds
+  minQualityScore: 0.3,
+  minContentLength: 10,
+  maxContentLength: 1000
 }
 
-// Conversation context analyzer
-export class ConversationAnalyzer {
-  async analyzeConversation(messages: any[]): Promise<ConversationContext> {
-    const recentMessages = messages.slice(-3) // Last 3 messages for context
-    const conversationText = recentMessages
-      .map(msg => `${msg.role}: ${msg.content}`)
-      .join("\n")
+// Enhanced conversation analysis
+class ConversationAnalyzer {
+  async analyzeConversation(messages: any[]): Promise<{
+    hasPersonalInfo: boolean
+    hasPreferences: boolean
+    hasProjectInfo: boolean
+    isQuestionAnswer: boolean
+    conversationLength: number
+    userEngagement: number
+    topics: string[]
+  }> {
+    const userMessages = messages.filter(msg => msg.role === "user")
+    const assistantMessages = messages.filter(msg => msg.role === "assistant")
 
-    try {
-      // Lazy import OpenAI to avoid webpack issues
-      const { default: OpenAI } = await import("openai")
-      const openai = new OpenAI({
-        apiKey: process.env.OPENAI_API_KEY
-      })
+    const allContent = userMessages.map(msg => msg.content).join(" ")
+    const lowerContent = allContent.toLowerCase()
 
-      const response = await openai.chat.completions.create({
-        model: "gpt-4o-mini",
-        messages: [
-          {
-            role: "system",
-            content: `Analyze this conversation snippet and return JSON with:
-            - topic: main subject being discussed
-            - sentiment: positive/negative/neutral
-            - complexity: simple/moderate/complex
-            - userIntent: question/statement/request/casual
-            - containsPersonalInfo: true/false
-            - conversationDepth: 1-5 (how deep/meaningful the conversation is)`
-          },
-          {
-            role: "user",
-            content: conversationText
-          }
-        ],
-        temperature: 0.1,
-        max_tokens: 200
-      })
+    // Analyze content patterns
+    const hasPersonalInfo =
+      /my name is|i am|i'm|i work as|my job is|i live in|i'm from|my age is/i.test(
+        lowerContent
+      )
+    const hasPreferences =
+      /i like|i prefer|i love|i hate|i enjoy|my favorite|i'm interested in/i.test(
+        lowerContent
+      )
+    const hasProjectInfo =
+      /project|goal|objective|deadline|timeline|milestone|i'm working on|i'm building/i.test(
+        lowerContent
+      )
 
-      const content = response.choices[0]?.message?.content
-      if (content) {
-        return JSON.parse(content)
-      }
-    } catch (error) {
-      console.warn("Failed to analyze conversation context:", error)
-    }
+    // Detect question-answer pattern
+    const isQuestionAnswer = userMessages.some(msg =>
+      /^(what|how|when|where|why|who|which|do you|can you|could you|would you|are you|is this|does this)/i.test(
+        msg.content.trim()
+      )
+    )
 
-    // Fallback analysis
-    return this.fallbackAnalysis(messages)
-  }
+    // Calculate engagement based on message length and frequency
+    const avgMessageLength =
+      userMessages.reduce((sum, msg) => sum + msg.content.length, 0) /
+      userMessages.length
+    const userEngagement = Math.min(
+      1,
+      (avgMessageLength / 100) *
+        (userMessages.length / Math.max(1, assistantMessages.length))
+    )
 
-  private fallbackAnalysis(messages: any[]): ConversationContext {
-    const lastMessage = messages[messages.length - 1]
-    const content = lastMessage?.content?.toLowerCase() || ""
+    // Extract topics
+    const topics = this.extractTopics(allContent)
 
     return {
-      topic: "general",
-      sentiment: "neutral",
-      complexity: content.length > 100 ? "moderate" : "simple",
-      userIntent: this.detectIntent(content),
-      containsPersonalInfo: this.containsPersonalInfo(content),
-      conversationDepth: Math.min(messages.length, 3)
+      hasPersonalInfo,
+      hasPreferences,
+      hasProjectInfo,
+      isQuestionAnswer,
+      conversationLength: messages.length,
+      userEngagement,
+      topics
     }
   }
 
-  private detectIntent(
-    content: string
-  ): "question" | "statement" | "request" | "casual" {
-    if (content.includes("?")) return "question"
-    if (
-      content.includes("please") ||
-      content.includes("can you") ||
-      content.includes("help")
-    )
-      return "request"
-    if (content.length < 20) return "casual"
-    return "statement"
-  }
+  private extractTopics(content: string): string[] {
+    const topics: string[] = []
+    const lowerContent = content.toLowerCase()
 
-  private containsPersonalInfo(content: string): boolean {
-    const personalPatterns = [
-      /my name is/i,
-      /i am/i,
-      /i'm/i,
-      /i work/i,
-      /i live/i,
-      /i like/i,
-      /i prefer/i,
-      /my job/i,
-      /my company/i,
-      /my family/i,
-      /my age/i,
-      /my email/i
-    ]
-    return personalPatterns.some(pattern => pattern.test(content))
+    // Extract common topics
+    if (/project|goal|objective/i.test(lowerContent)) topics.push("project")
+    if (/work|job|career|profession/i.test(lowerContent)) topics.push("work")
+    if (/family|wife|husband|children|kids/i.test(lowerContent))
+      topics.push("family")
+    if (/hobby|interest|passion|enjoy/i.test(lowerContent)) topics.push("hobby")
+    if (/technology|tech|software|programming|coding/i.test(lowerContent))
+      topics.push("technology")
+    if (/business|company|startup|entrepreneur/i.test(lowerContent))
+      topics.push("business")
+
+    return topics
   }
 }
 
-// Intelligent memory extractor
-export class IntelligentMemoryExtractor {
-  private analyzer: ConversationAnalyzer
-  private processingCache: Map<string, MemoryExtractionResult> = new Map()
+// Enhanced memory candidate extraction
+class MemoryCandidateExtractor {
+  private analyzer = new ConversationAnalyzer()
 
-  constructor() {
-    this.analyzer = new ConversationAnalyzer()
+  async extractMemoryCandidates(
+    messages: any[],
+    context: any,
+    priority: string
+  ): Promise<MemoryCandidate[]> {
+    const candidates: MemoryCandidate[] = []
+    const userMessages = messages.filter(msg => msg.role === "user")
+
+    // Process each user message
+    for (const message of userMessages) {
+      const content = message.content
+
+      // Skip if content is too short or too long
+      if (
+        content.length < INTELLIGENT_MEMORY_CONFIG.minContentLength ||
+        content.length > INTELLIGENT_MEMORY_CONFIG.maxContentLength
+      ) {
+        continue
+      }
+
+      // Skip questions
+      if (this.isQuestion(content)) {
+        continue
+      }
+
+      // Calculate confidence based on content type and priority
+      const confidence = this.calculateConfidence(content, context, priority)
+
+      if (confidence >= INTELLIGENT_MEMORY_CONFIG.minQualityScore) {
+        candidates.push({
+          content,
+          confidence,
+          type: this.determineMemoryType(content),
+          source: "user_message",
+          timestamp: new Date()
+        })
+      }
+    }
+
+    // Sort by confidence and limit
+    return candidates
+      .sort((a, b) => b.confidence - a.confidence)
+      .slice(0, INTELLIGENT_MEMORY_CONFIG.maxMemoriesPerConversation)
   }
+
+  private isQuestion(content: string): boolean {
+    const trimmed = content.trim()
+    return /^(what|how|when|where|why|who|which|do you|can you|could you|would you|are you|is this|does this)/i.test(
+      trimmed
+    )
+  }
+
+  private calculateConfidence(
+    content: string,
+    context: any,
+    priority: string
+  ): number {
+    let confidence = 0.5 // Base confidence
+
+    // Boost based on priority
+    switch (priority) {
+      case "high":
+        confidence += 0.3
+        break
+      case "medium":
+        confidence += 0.1
+        break
+      case "low":
+        confidence -= 0.1
+        break
+    }
+
+    // Boost based on content type
+    const lowerContent = content.toLowerCase()
+    if (/my name is|i am|i'm|i work as|my job is/i.test(lowerContent)) {
+      confidence += 0.2 // Personal info
+    }
+    if (
+      /i like|i prefer|i love|i hate|i enjoy|my favorite/i.test(lowerContent)
+    ) {
+      confidence += 0.15 // Preferences
+    }
+    if (/project|goal|objective|deadline|timeline/i.test(lowerContent)) {
+      confidence += 0.15 // Project info
+    }
+
+    // Boost based on context relevance
+    if (context.topics.some((topic: string) => lowerContent.includes(topic))) {
+      confidence += 0.1
+    }
+
+    // Penalize very short or very long content
+    const wordCount = content.split(/\s+/).length
+    if (wordCount < 5) confidence -= 0.2
+    if (wordCount > 200) confidence -= 0.1
+
+    return Math.max(0, Math.min(1, confidence))
+  }
+
+  private determineMemoryType(content: string): MemoryType {
+    const lowerContent = content.toLowerCase()
+
+    if (
+      /my name is|i am|i'm|i work as|my job is|i live in|i'm from/i.test(
+        lowerContent
+      )
+    ) {
+      return "personal"
+    }
+    if (
+      /i like|i prefer|i love|i hate|i enjoy|my favorite/i.test(lowerContent)
+    ) {
+      return "preference"
+    }
+    if (
+      /project|goal|objective|deadline|timeline|i'm working on/i.test(
+        lowerContent
+      )
+    ) {
+      return "project"
+    }
+    if (
+      /technology|tech|software|programming|coding|framework/i.test(
+        lowerContent
+      )
+    ) {
+      return "technical"
+    }
+
+    return "conversation_context"
+  }
+}
+
+// Enhanced intelligent memory extractor
+export class IntelligentMemoryExtractor {
+  private analyzer = new ConversationAnalyzer()
+  private extractor = new MemoryCandidateExtractor()
+  private processingCache = new Map<string, MemoryExtractionResult>()
 
   async shouldExtractMemories(
     messages: any[]
@@ -216,7 +340,7 @@ export class IntelligentMemoryExtractor {
     }
 
     // Extract memory candidates based on priority
-    const candidates = await this.extractMemoryCandidates(
+    const candidates = await this.extractor.extractMemoryCandidates(
       messages,
       context,
       processingPriority
@@ -235,217 +359,61 @@ export class IntelligentMemoryExtractor {
   private isSimpleQuestion(content: string): boolean {
     if (!content) return true
 
-    const simpleQuestions = [
-      "where were we",
-      "what were we talking about",
-      "can you repeat that",
-      "what did you say",
-      "huh",
-      "what",
-      "sorry",
-      "pardon",
-      "excuse me"
-    ]
+    const trimmed = content.trim()
 
-    const lowerContent = content.toLowerCase().trim()
-    return simpleQuestions.some(q => lowerContent.includes(q))
+    // Very short questions
+    if (trimmed.length < 20) return true
+
+    // Simple yes/no questions
+    if (
+      /^(are you|is this|does this|do you|can you|could you|would you)/i.test(
+        trimmed
+      )
+    ) {
+      return true
+    }
+
+    // Questions that don't provide context
+    if (/^(what is|what are|how do|when do|where do)/i.test(trimmed)) {
+      return true
+    }
+
+    return false
   }
 
   private determineProcessingPriority(
-    context: ConversationContext,
+    context: any,
     messages: any[]
   ): "high" | "medium" | "low" | "skip" {
-    // High priority: Personal info + complex conversation
-    if (context.containsPersonalInfo && context.complexity === "complex") {
+    // High priority: Personal information or high engagement
+    if (context.hasPersonalInfo || context.userEngagement > 0.7) {
       return "high"
     }
 
-    // Medium priority: Personal info OR complex conversation
-    if (context.containsPersonalInfo || context.complexity === "complex") {
+    // Medium priority: Preferences, project info, or moderate engagement
+    if (
+      context.hasPreferences ||
+      context.hasProjectInfo ||
+      context.userEngagement > 0.4
+    ) {
       return "medium"
     }
 
-    // Low priority: Simple conversation with some depth
-    if (context.conversationDepth > 2) {
+    // Low priority: General conversation with some engagement
+    if (context.userEngagement > 0.2 && context.conversationLength > 2) {
       return "low"
     }
 
-    // Skip: Simple, casual conversations
-    return "skip"
-  }
-
-  private async extractMemoryCandidates(
-    messages: any[],
-    context: ConversationContext,
-    priority: "high" | "medium" | "low"
-  ): Promise<MemoryCandidate[]> {
-    const candidates: MemoryCandidate[] = []
-
-    // Only process user messages
-    const userMessages = messages.filter(msg => msg.role === "user")
-
-    // Limit processing based on priority
-    const maxMessages =
-      priority === "high"
-        ? userMessages.length
-        : priority === "medium"
-          ? Math.min(userMessages.length, 2)
-          : 1
-
-    for (let i = 0; i < Math.min(maxMessages, userMessages.length); i++) {
-      const message = userMessages[i]
-      const content = message.content
-
-      // Extract based on content type
-      const personalInfo = this.extractPersonalInfo(content)
-      const preferences = this.extractPreferences(content)
-      const technicalInfo = this.extractTechnicalInfo(content)
-      const projectInfo = this.extractProjectInfo(content)
-
-      // Add candidates with appropriate confidence
-      if (personalInfo) {
-        candidates.push({
-          content: personalInfo,
-          confidence: 0.9,
-          type: "personal",
-          source: "user_message",
-          timestamp: new Date()
-        })
-      }
-
-      if (preferences) {
-        candidates.push({
-          content: preferences,
-          confidence: 0.85,
-          type: "preference",
-          source: "user_message",
-          timestamp: new Date()
-        })
-      }
-
-      if (technicalInfo) {
-        candidates.push({
-          content: technicalInfo,
-          confidence: 0.8,
-          type: "technical",
-          source: "user_message",
-          timestamp: new Date()
-        })
-      }
-
-      if (projectInfo) {
-        candidates.push({
-          content: projectInfo,
-          confidence: 0.75,
-          type: "project",
-          source: "user_message",
-          timestamp: new Date()
-        })
-      }
+    // Skip: Low engagement or question-answer patterns
+    if (context.userEngagement < 0.2 || context.isQuestionAnswer) {
+      return "skip"
     }
 
-    // Filter by confidence threshold and limit
-    return candidates
-      .filter(
-        candidate =>
-          candidate.confidence >=
-          INTELLIGENT_MEMORY_CONFIG.mediumConfidenceThreshold
-      )
-      .slice(0, INTELLIGENT_MEMORY_CONFIG.maxMemoriesPerConversation)
-  }
-
-  private extractPersonalInfo(content: string): string | null {
-    const patterns = [
-      {
-        pattern: /my name is (.+?)(?:\.|$)/i,
-        extract: (match: RegExpMatchArray) => `Name: ${match[1].trim()}`
-      },
-      {
-        pattern: /i work (?:as|at) (.+?)(?:\.|$)/i,
-        extract: (match: RegExpMatchArray) => `Work: ${match[1].trim()}`
-      },
-      {
-        pattern: /i live in (.+?)(?:\.|$)/i,
-        extract: (match: RegExpMatchArray) => `Location: ${match[1].trim()}`
-      },
-      {
-        pattern: /i'm (\d+) years old/i,
-        extract: (match: RegExpMatchArray) => `Age: ${match[1]} years old`
-      }
-    ]
-
-    for (const { pattern, extract } of patterns) {
-      const match = content.match(pattern)
-      if (match) {
-        return extract(match)
-      }
-    }
-
-    return null
-  }
-
-  private extractPreferences(content: string): string | null {
-    const patterns = [
-      {
-        pattern: /i (?:like|love|enjoy) (.+?)(?:\.|$)/i,
-        extract: (match: RegExpMatchArray) => `Likes: ${match[1].trim()}`
-      },
-      {
-        pattern: /i (?:don't like|hate|dislike) (.+?)(?:\.|$)/i,
-        extract: (match: RegExpMatchArray) => `Dislikes: ${match[1].trim()}`
-      },
-      {
-        pattern: /i prefer (.+?) over (.+?)(?:\.|$)/i,
-        extract: (match: RegExpMatchArray) =>
-          `Preference: ${match[1].trim()} over ${match[2].trim()}`
-      }
-    ]
-
-    for (const { pattern, extract } of patterns) {
-      const match = content.match(pattern)
-      if (match) {
-        return extract(match)
-      }
-    }
-
-    return null
-  }
-
-  private extractTechnicalInfo(content: string): string | null {
-    const techPatterns = [
-      /(?:i use|i work with|i know|i'm familiar with) (.+?)(?:\.|$)/i,
-      /(?:programming|coding|development|software|technology|framework|language|tool|stack|api|database|server|frontend|backend|algorithm|data structure|git|deployment|testing|debugging)/i
-    ]
-
-    for (const pattern of techPatterns) {
-      if (pattern.test(content)) {
-        return content.length > 100
-          ? content.substring(0, 100) + "..."
-          : content
-      }
-    }
-
-    return null
-  }
-
-  private extractProjectInfo(content: string): string | null {
-    const projectPatterns = [
-      /(?:project|task|goal|objective|deadline|timeline|milestone|sprint|iteration|deliverable|requirement|feature|bug|issue|roadmap|plan|strategy)/i
-    ]
-
-    for (const pattern of projectPatterns) {
-      if (pattern.test(content)) {
-        return content.length > 100
-          ? content.substring(0, 100) + "..."
-          : content
-      }
-    }
-
-    return null
+    return "low"
   }
 
   private generateCacheKey(messages: any[]): string {
-    const recentMessages = messages.slice(-2) // Last 2 messages for cache key
+    const recentMessages = messages.slice(-3) // Last 3 messages for cache key
     return recentMessages
       .map(msg => `${msg.role}:${msg.content.substring(0, 50)}`)
       .join("|")
