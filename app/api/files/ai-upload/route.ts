@@ -1,8 +1,8 @@
 import { createClient } from "@/lib/supabase/server"
 import { getServerProfile } from "@/lib/server/server-chat-helpers"
 import { NextRequest, NextResponse } from "next/server"
-import { createFileBasedOnExtension } from "@/db/files"
 import { cookies } from "next/headers"
+import mammoth from "mammoth"
 
 // Function to analyze file content and generate metadata
 async function analyzeFileWithAI(file: File, fileContent?: string) {
@@ -163,6 +163,253 @@ async function extractFileContent(file: File): Promise<string> {
   }
 }
 
+// Server-side file creation function
+async function createFileServerSide(
+  supabase: any,
+  file: File,
+  fileRecord: any,
+  workspace_id: string,
+  embeddingsProvider: "openai" | "local"
+) {
+  const fileExtension = file.name.split(".").pop()
+
+  if (fileExtension === "docx") {
+    const arrayBuffer = await file.arrayBuffer()
+    const result = await mammoth.extractRawText({
+      arrayBuffer
+    })
+
+    return createDocXFileServerSide(
+      supabase,
+      result.value,
+      file,
+      fileRecord,
+      workspace_id,
+      embeddingsProvider
+    )
+  } else {
+    return createRegularFileServerSide(
+      supabase,
+      file,
+      fileRecord,
+      workspace_id,
+      embeddingsProvider
+    )
+  }
+}
+
+// Server-side regular file creation
+async function createRegularFileServerSide(
+  supabase: any,
+  file: File,
+  fileRecord: any,
+  workspace_id: string,
+  embeddingsProvider: "openai" | "local"
+) {
+  // Sanitize filename
+  let validFilename = fileRecord.name.replace(/[^a-z0-9.]/gi, "_").toLowerCase()
+  const extension = file.name.split(".").pop()
+  const extensionIndex = validFilename.lastIndexOf(".")
+  const baseName = validFilename.substring(
+    0,
+    extensionIndex < 0 ? undefined : extensionIndex
+  )
+  const maxBaseNameLength = 100 - (extension?.length || 0) - 1
+  if (baseName.length > maxBaseNameLength) {
+    fileRecord.name = baseName.substring(0, maxBaseNameLength) + "." + extension
+  } else {
+    fileRecord.name = baseName + "." + extension
+  }
+
+  // Create file record
+  const { data: createdFile, error } = await supabase
+    .from("files")
+    .insert([fileRecord])
+    .select("*")
+    .single()
+
+  if (error) {
+    console.error("File creation error:", error)
+    throw new Error(error.message)
+  }
+
+  // Create file-workspace relationship
+  const { error: workspaceError } = await supabase
+    .from("file_workspaces")
+    .insert([
+      {
+        user_id: createdFile.user_id,
+        file_id: createdFile.id,
+        workspace_id
+      }
+    ])
+
+  if (workspaceError) {
+    console.error("File workspace creation error:", workspaceError)
+    throw new Error(workspaceError.message)
+  }
+
+  // Upload file to storage
+  const fileName = `${createdFile.user_id}/${createdFile.name}`
+  const { data: uploadData, error: uploadError } = await supabase.storage
+    .from("files")
+    .upload(fileName, file)
+
+  if (uploadError) {
+    console.error("File upload error:", uploadError)
+    throw new Error(uploadError.message)
+  }
+
+  // Update file with path
+  const { error: updateError } = await supabase
+    .from("files")
+    .update({ file_path: fileName })
+    .eq("id", createdFile.id)
+
+  if (updateError) {
+    console.error("File path update error:", updateError)
+    throw new Error(updateError.message)
+  }
+
+  // Process file for embeddings
+  const formData = new FormData()
+  formData.append("file_id", createdFile.id)
+  formData.append("embeddingsProvider", embeddingsProvider)
+
+  const response = await fetch(
+    `${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/api/retrieval/process`,
+    {
+      method: "POST",
+      body: formData
+    }
+  )
+
+  if (!response.ok) {
+    const jsonText = await response.text()
+    const json = JSON.parse(jsonText)
+    console.error(
+      `Error processing file:${createdFile.id}, status:${response.status}, response:${json.message}`
+    )
+    // Clean up on processing error
+    await supabase.from("files").delete().eq("id", createdFile.id)
+    throw new Error(`Failed to process file: ${json.message}`)
+  }
+
+  // Get the final file record
+  const { data: finalFile, error: fetchError } = await supabase
+    .from("files")
+    .select("*")
+    .eq("id", createdFile.id)
+    .single()
+
+  if (fetchError) {
+    throw new Error(fetchError.message)
+  }
+
+  return finalFile
+}
+
+// Server-side DOCX file creation
+async function createDocXFileServerSide(
+  supabase: any,
+  text: string,
+  file: File,
+  fileRecord: any,
+  workspace_id: string,
+  embeddingsProvider: "openai" | "local"
+) {
+  // Create file record
+  const { data: createdFile, error } = await supabase
+    .from("files")
+    .insert([fileRecord])
+    .select("*")
+    .single()
+
+  if (error) {
+    console.error("DOCX file creation error:", error)
+    throw new Error(error.message)
+  }
+
+  // Create file-workspace relationship
+  const { error: workspaceError } = await supabase
+    .from("file_workspaces")
+    .insert([
+      {
+        user_id: createdFile.user_id,
+        file_id: createdFile.id,
+        workspace_id
+      }
+    ])
+
+  if (workspaceError) {
+    console.error("DOCX file workspace creation error:", workspaceError)
+    throw new Error(workspaceError.message)
+  }
+
+  // Upload file to storage
+  const fileName = `${createdFile.user_id}/${createdFile.name}`
+  const { data: uploadData, error: uploadError } = await supabase.storage
+    .from("files")
+    .upload(fileName, file)
+
+  if (uploadError) {
+    console.error("DOCX file upload error:", uploadError)
+    throw new Error(uploadError.message)
+  }
+
+  // Update file with path
+  const { error: updateError } = await supabase
+    .from("files")
+    .update({ file_path: fileName })
+    .eq("id", createdFile.id)
+
+  if (updateError) {
+    console.error("DOCX file path update error:", updateError)
+    throw new Error(updateError.message)
+  }
+
+  // Process DOCX file for embeddings
+  const response = await fetch(
+    `${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/api/retrieval/process/docx`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        text: text,
+        fileId: createdFile.id,
+        embeddingsProvider,
+        fileExtension: "docx"
+      })
+    }
+  )
+
+  if (!response.ok) {
+    const jsonText = await response.text()
+    const json = JSON.parse(jsonText)
+    console.error(
+      `Error processing DOCX file:${createdFile.id}, status:${response.status}, response:${json.message}`
+    )
+    // Clean up on processing error
+    await supabase.from("files").delete().eq("id", createdFile.id)
+    throw new Error(`Failed to process DOCX file: ${json.message}`)
+  }
+
+  // Get the final file record
+  const { data: finalFile, error: fetchError } = await supabase
+    .from("files")
+    .select("*")
+    .eq("id", createdFile.id)
+    .single()
+
+  if (fetchError) {
+    throw new Error(fetchError.message)
+  }
+
+  return finalFile
+}
+
 export async function POST(req: NextRequest) {
   try {
     const supabase = createClient(cookies())
@@ -188,6 +435,32 @@ export async function POST(req: NextRequest) {
       )
     }
 
+    // Validate workspace access
+    const { data: workspace, error: workspaceError } = await supabase
+      .from("workspaces")
+      .select("id, user_id")
+      .eq("id", workspace_id)
+      .single()
+
+    if (workspaceError || !workspace) {
+      console.error("Workspace validation error:", workspaceError)
+      return NextResponse.json(
+        { error: "Workspace not found or access denied" },
+        { status: 404 }
+      )
+    }
+
+    if (workspace.user_id !== profile.user_id) {
+      console.error("Workspace access denied:", {
+        workspaceUserId: workspace.user_id,
+        profileUserId: profile.user_id
+      })
+      return NextResponse.json(
+        { error: "Access denied to workspace" },
+        { status: 403 }
+      )
+    }
+
     // Extract file content for AI analysis
     const fileContent = await extractFileContent(file)
 
@@ -210,11 +483,18 @@ export async function POST(req: NextRequest) {
       uploaded_at: new Date().toISOString(),
       related_entity_id: related_entity_id || null,
       related_entity_type: related_entity_type || null,
-      folder_id: folder_id || null
+      folder_id: folder_id || null,
+      sharing: "private" // Ensure sharing is set
     }
 
-    // Create the file using existing logic
-    const createdFile = await createFileBasedOnExtension(
+    console.log("Creating file with record:", {
+      ...fileRecord,
+      user_id: fileRecord.user_id // Log user_id for debugging
+    })
+
+    // Create the file using server-side logic
+    const createdFile = await createFileServerSide(
+      supabase,
       file,
       fileRecord,
       workspace_id,
@@ -228,6 +508,19 @@ export async function POST(req: NextRequest) {
     })
   } catch (error: any) {
     console.error("AI file upload error:", error)
+
+    // Provide more specific error messages
+    if (error.message?.includes("row-level security policy")) {
+      return NextResponse.json(
+        {
+          error:
+            "Access denied. Please ensure you have permission to upload files to this workspace.",
+          details: error.message
+        },
+        { status: 403 }
+      )
+    }
+
     return NextResponse.json(
       { error: error.message || "Failed to upload file" },
       { status: 500 }
