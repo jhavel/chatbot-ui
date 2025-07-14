@@ -133,8 +133,8 @@ export async function GET(request: NextRequest) {
     const memorySaveStart = Date.now()
     try {
       const timestamp = Date.now()
-      // Use high-quality test content that should pass quality assessment
-      const highQualityContent = `My name is ${user.email?.split("@")[0] || "User"} and I work as a software developer. I prefer using TypeScript for my projects and I'm currently working on a chatbot application. My favorite programming language is JavaScript and I enjoy building web applications.`
+      // Use user.id for the name to avoid linter/type errors
+      const highQualityContent = `My name is ${user.id} and I work as a software developer. I prefer using TypeScript for my projects and I'm currently working on a chatbot application. My favorite programming language is JavaScript and I enjoy building web applications.`
 
       const testMemory = await saveEnhancedMemory(
         supabase,
@@ -449,11 +449,26 @@ export async function GET(request: NextRequest) {
     // Test 12: File Upload - Storage Only (No Database Records)
     const uploadStart = Date.now()
     try {
+      // First check if the storage bucket exists
+      const { data: buckets, error: bucketError } =
+        await supabase.storage.listBuckets()
+
+      if (bucketError) {
+        throw new Error(`Storage bucket check failed: ${bucketError.message}`)
+      }
+
+      const filesBucket = buckets?.find(bucket => bucket.name === "files")
+      if (!filesBucket) {
+        throw new Error("Storage bucket 'files' not found")
+      }
+
       const testFile = new Blob(["Test file content for status check"], {
         type: "text/plain"
       })
       const fileName = `status-test-${Date.now()}.txt`
       const testPath = `status-tests/${user.id}/${fileName}`
+
+      console.log(`📁 Testing file upload to path: ${testPath}`)
 
       // Upload test file to storage only
       const { data: uploadData, error: uploadError } = await supabase.storage
@@ -464,18 +479,24 @@ export async function GET(request: NextRequest) {
         })
 
       if (uploadError) {
-        throw uploadError
+        console.error("❌ Upload error:", uploadError)
+        throw new Error(`Upload failed: ${uploadError.message}`)
       }
+
+      console.log("✅ File uploaded successfully")
 
       // Verify the file was uploaded by trying to download it
       const { data: downloadData, error: downloadError } =
         await supabase.storage.from("files").download(testPath)
 
       if (downloadError) {
+        console.error("❌ Download verification error:", downloadError)
         throw new Error(
           `File upload verification failed: ${downloadError.message}`
         )
       }
+
+      console.log("✅ File download verification successful")
 
       // Clean up test file immediately
       const { error: deleteError } = await supabase.storage
@@ -483,7 +504,9 @@ export async function GET(request: NextRequest) {
         .remove([testPath])
 
       if (deleteError) {
-        console.warn("Failed to clean up test file:", deleteError.message)
+        console.warn("⚠️ Failed to clean up test file:", deleteError.message)
+      } else {
+        console.log("✅ Test file cleaned up successfully")
       }
 
       const uploadDuration = Date.now() - uploadStart
@@ -496,13 +519,75 @@ export async function GET(request: NextRequest) {
         duration: uploadDuration
       })
     } catch (error) {
+      console.error("❌ File upload test error:", error)
+
+      // Provide more specific error information
+      let errorMessage = "Unknown error"
+      let errorDetails = "File upload test failed"
+
+      if (error instanceof Error) {
+        errorMessage = error.message
+        errorDetails = `File upload test failed: ${error.message}`
+      } else if (typeof error === "string") {
+        errorMessage = error
+        errorDetails = `File upload test failed: ${error}`
+      } else if (error && typeof error === "object") {
+        errorMessage = JSON.stringify(error)
+        errorDetails = `File upload test failed: ${JSON.stringify(error)}`
+      }
+
       tests.push({
         name: "File Upload",
         description: "File upload to Supabase storage (storage only)",
         status: "fail",
-        details: "File upload test failed",
-        error: error instanceof Error ? error.message : "Unknown error"
+        details: errorDetails,
+        error: error instanceof Error ? error.message : JSON.stringify(error)
       })
+    }
+
+    // Test 12b: File Upload Fallback - Simple Storage Check
+    if (tests.find(t => t.name === "File Upload")?.status === "fail") {
+      const fallbackStart = Date.now()
+      try {
+        console.log("🔄 Running file upload fallback test...")
+
+        // Simple storage bucket check as fallback
+        const { data: buckets, error: bucketError } =
+          await supabase.storage.listBuckets()
+
+        if (bucketError) {
+          throw new Error(`Storage bucket check failed: ${bucketError.message}`)
+        }
+
+        const filesBucket = buckets?.find(bucket => bucket.name === "files")
+        if (!filesBucket) {
+          throw new Error("Storage bucket 'files' not found")
+        }
+
+        const fallbackDuration = Date.now() - fallbackStart
+
+        tests.push({
+          name: "File Upload (Fallback)",
+          description: "Storage bucket availability check",
+          status: "pass",
+          details:
+            "Storage bucket accessible, upload functionality may be limited",
+          duration: fallbackDuration
+        })
+      } catch (error) {
+        console.error("❌ File upload fallback test error:", error)
+
+        const fallbackDuration = Date.now() - fallbackStart
+
+        tests.push({
+          name: "File Upload (Fallback)",
+          description: "Storage bucket availability check",
+          status: "fail",
+          details: "Storage bucket not accessible",
+          duration: fallbackDuration,
+          error: error instanceof Error ? error.message : JSON.stringify(error)
+        })
+      }
     }
 
     // Test 13: RLS Policy Validation
