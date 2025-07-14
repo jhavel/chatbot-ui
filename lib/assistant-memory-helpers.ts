@@ -38,7 +38,7 @@ export const saveAssistantMemory = async (supabase: any, content: string) => {
     await saveMemoryUnified(supabase, {
       content,
       user_id: profile.user_id,
-      source: "assistant",
+      source: "ai",
       context: { function: "saveAssistantMemory" }
     })
     console.log("🧠 Assistant memory saved:", content.substring(0, 50) + "...")
