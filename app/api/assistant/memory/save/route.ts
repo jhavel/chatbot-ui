@@ -36,7 +36,7 @@ export async function POST(request: NextRequest) {
     const memory = await saveMemoryUnified(supabase, {
       content,
       user_id,
-      source: "assistant",
+      source: "ai",
       context: { api: "/api/assistant/memory/save" }
     })
 
