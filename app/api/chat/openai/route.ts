@@ -3,7 +3,7 @@ console.log("🔥 OpenAI route hit")
 import { NextRequest } from "next/server"
 import { createRouteHandlerClient } from "@supabase/auth-helpers-nextjs"
 import { cookies } from "next/headers"
-import { StreamingTextResponse } from "ai"
+import { OpenAIStream, StreamingTextResponse } from "ai"
 import { ChatSettings } from "@/types"
 import { getServerProfile } from "@/lib/server/server-chat-helpers"
 import { checkApiKey } from "@/lib/server/server-chat-helpers"
@@ -214,52 +214,10 @@ export async function POST(request: Request) {
       return new StreamingTextResponse(stream)
     }
 
-    // Create a streaming response
-    const stream = new ReadableStream({
-      async start(controller) {
-        const encoder = new TextEncoder()
-        const reader = response.body?.getReader()
-        const decoder = new TextDecoder()
+    // Create a stream of the response using OpenAIStream
+    const stream = OpenAIStream(response)
 
-        if (!reader) {
-          controller.close()
-          return
-        }
-
-        try {
-          while (true) {
-            const { done, value } = await reader.read()
-            if (done) break
-
-            const chunk = decoder.decode(value)
-            const lines = chunk.split("\n")
-
-            for (const line of lines) {
-              if (!line.startsWith("data: ")) continue
-              const messageData = line.replace(/^data: /, "")
-              if (messageData === "[DONE]") continue
-
-              try {
-                const parsed = JSON.parse(messageData)
-                const content = parsed.choices?.[0]?.delta?.content
-                if (content && typeof content === "string") {
-                  const data = `data: ${JSON.stringify({ choices: [{ delta: { content } }] })}\n`
-                  controller.enqueue(encoder.encode(data))
-                }
-              } catch (err) {
-                console.error("Error parsing chunk:", err, messageData)
-              }
-            }
-          }
-        } catch (error) {
-          console.error("Error reading stream:", error)
-        } finally {
-          reader.releaseLock()
-          controller.close()
-        }
-      }
-    })
-
+    // Return a StreamingTextResponse, which can be consumed by the client
     return new StreamingTextResponse(stream)
   } catch (error) {
     console.error("Error in OpenAI API call:", error)
