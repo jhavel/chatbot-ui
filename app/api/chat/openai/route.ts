@@ -3,7 +3,7 @@ console.log("🔥 OpenAI route hit")
 import { NextRequest } from "next/server"
 import { createRouteHandlerClient } from "@supabase/auth-helpers-nextjs"
 import { cookies } from "next/headers"
-import { OpenAIStream, StreamingTextResponse } from "ai"
+import { StreamingTextResponse } from "ai"
 import { ChatSettings } from "@/types"
 import { getServerProfile } from "@/lib/server/server-chat-helpers"
 import { checkApiKey } from "@/lib/server/server-chat-helpers"
@@ -214,10 +214,83 @@ export async function POST(request: Request) {
       return new StreamingTextResponse(stream)
     }
 
-    // Create a stream of the response using OpenAIStream
-    const stream = OpenAIStream(response)
+    // Create a streaming response with proper edge runtime compatibility
+    const stream = new ReadableStream({
+      async start(controller) {
+        const encoder = new TextEncoder()
+        const reader = response.body?.getReader()
+        const decoder = new TextDecoder()
+        let buffer = ""
 
-    // Return a StreamingTextResponse, which can be consumed by the client
+        if (!reader) {
+          controller.close()
+          return
+        }
+
+        try {
+          while (true) {
+            const { done, value } = await reader.read()
+            if (done) break
+
+            const chunk = decoder.decode(value, { stream: true })
+            buffer += chunk
+
+            // Process complete lines
+            const lines = buffer.split("\n")
+            buffer = lines.pop() || "" // Keep incomplete line in buffer
+
+            for (const line of lines) {
+              if (!line.startsWith("data: ")) continue
+              const messageData = line.replace(/^data: /, "")
+              if (messageData === "[DONE]") {
+                controller.close()
+                return
+              }
+
+              try {
+                const parsed = JSON.parse(messageData)
+                const content = parsed.choices?.[0]?.delta?.content
+                if (content && typeof content === "string") {
+                  const data = `data: ${JSON.stringify({ choices: [{ delta: { content } }] })}\n`
+                  controller.enqueue(encoder.encode(data))
+                }
+              } catch (err) {
+                // Skip malformed JSON chunks instead of logging errors
+                continue
+              }
+            }
+          }
+
+          // Process any remaining buffer
+          if (buffer.trim()) {
+            const lines = buffer.split("\n")
+            for (const line of lines) {
+              if (!line.startsWith("data: ")) continue
+              const messageData = line.replace(/^data: /, "")
+              if (messageData === "[DONE]") break
+
+              try {
+                const parsed = JSON.parse(messageData)
+                const content = parsed.choices?.[0]?.delta?.content
+                if (content && typeof content === "string") {
+                  const data = `data: ${JSON.stringify({ choices: [{ delta: { content } }] })}\n`
+                  controller.enqueue(encoder.encode(data))
+                }
+              } catch (err) {
+                // Skip malformed JSON chunks
+                continue
+              }
+            }
+          }
+        } catch (error) {
+          console.error("Error reading stream:", error)
+        } finally {
+          reader.releaseLock()
+          controller.close()
+        }
+      }
+    })
+
     return new StreamingTextResponse(stream)
   } catch (error) {
     console.error("Error in OpenAI API call:", error)
